@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   Archive,
   Bell,
+  Camera,
   CheckCircle2,
   CreditCard,
   Download,
@@ -44,7 +45,7 @@ function useProducts(context: BusinessContext, search = "") {
       let query = supabase
         .from("products")
         .select(
-          "id,name,sku,unit,image_path,price_centavos,cost_centavos,minimum_stock,status,product_barcodes(barcode,is_primary),inventory_balances(confirmed_quantity,branch_id)",
+          "id,name,description,sku,unit,image_path,price_centavos,cost_centavos,minimum_stock,status,product_barcodes(barcode,is_primary),inventory_balances(confirmed_quantity,branch_id)",
         )
         .eq("business_id", context.businessId)
         .eq("status", "active")
@@ -536,6 +537,9 @@ export function InventoryView({ context }: { context: BusinessContext }) {
     barcode: string
     name: string
     imageUrl: string | null
+    imageFile: File | null
+    imagePreview: string | null
+    description: string
   } | null>(null)
   const inventoryScanSequence = useRef(0)
   const [quantity, setQuantity] = useState("")
@@ -595,18 +599,34 @@ export function InventoryView({ context }: { context: BusinessContext }) {
       setBusy(false)
       return setMessage(error.message)
     }
+    let imagePath = newProduct.imageUrl
+    let imageUploadWarning = ""
+    if (newProduct.imageFile) {
+      const extension = newProduct.imageFile.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg"
+      const storagePath = `${context.businessId}/${productId}/${crypto.randomUUID()}.${extension}`
+      const { error: uploadError } = await supabase.storage
+        .from("product-images")
+        .upload(storagePath, newProduct.imageFile, { contentType: newProduct.imageFile.type, upsert: false })
+      if (uploadError) {
+        imageUploadWarning = ` The product was saved, but its photo could not be uploaded: ${uploadError.message}`
+      } else {
+        imagePath = supabase.storage.from("product-images").getPublicUrl(storagePath).data.publicUrl
+      }
+    }
     const { error: detailsError } = await supabase
       .from("products")
       .update({
         unit: String(values.get("unit")),
         minimum_stock: minimumStock,
-        image_path: newProduct.imageUrl,
+        description: newProduct.description.trim() || null,
+        image_path: imagePath,
       })
       .eq("id", productId)
       .eq("business_id", context.businessId)
     setBusy(false)
     if (detailsError) return setMessage(detailsError.message)
-    setMessage(`${name} was added to inventory.`)
+    setMessage(`${name} was added to inventory.${imageUploadWarning}`)
+    if (newProduct.imagePreview) URL.revokeObjectURL(newProduct.imagePreview)
     setNewProduct(null)
     setQuantity("")
     await queryClient.invalidateQueries({ queryKey: ["products"] })
@@ -620,7 +640,7 @@ export function InventoryView({ context }: { context: BusinessContext }) {
       const sequence = ++inventoryScanSequence.current
       setSelected(null)
       setSelectedImage(null)
-      setNewProduct({ barcode: value, name: "", imageUrl: null })
+      setNewProduct({ barcode: value, name: "", imageUrl: null, imageFile: null, imagePreview: null, description: "" })
       setLookupBusy(true)
       setMessage(`Barcode ${value} is new. Looking up product information…`)
       try {
@@ -630,6 +650,9 @@ export function InventoryView({ context }: { context: BusinessContext }) {
           barcode: value,
           name: details?.name ?? "",
           imageUrl: details?.imageUrl ?? null,
+          imageFile: null,
+          imagePreview: null,
+          description: "",
         })
         setMessage(details ? "Product information found. Confirm the details below." : "Barcode scanned successfully. Enter the product details below.")
         return {
@@ -697,10 +720,12 @@ export function InventoryView({ context }: { context: BusinessContext }) {
       {message && <div className="form-message workspace-message">{message}</div>}
       {newProduct && <form className="inline-form inventory-new-product-form panel" onSubmit={addScannedProduct}>
         <div className="barcode-product-preview">
-          {newProduct.imageUrl ? <img src={newProduct.imageUrl} alt={`${newProduct.name || "Scanned product"} package`} /> : <span className="barcode-product-placeholder"><Package /></span>}
-          <div><b>{newProduct.name || "New scanned product"}</b><small>Barcode: {newProduct.barcode}</small><span className="image-source-copy">{newProduct.imageUrl ? "Product image found" : "No product image available"}</span></div>
+          {newProduct.imagePreview || newProduct.imageUrl ? <img src={newProduct.imagePreview || newProduct.imageUrl || ""} alt={`${newProduct.name || "Scanned product"} package`} /> : <span className="barcode-product-placeholder"><Package /></span>}
+          <div><b>{newProduct.name || "New scanned product"}</b><small>EAN barcode saved: {newProduct.barcode}</small><span className="image-source-copy">{newProduct.imageFile ? "Photo ready to upload" : newProduct.imageUrl ? "Product image found" : "Add a product photo below"}</span></div>
         </div>
         <Field label="Product name" name="name" required value={newProduct.name} onChange={(event) => setNewProduct((current) => current ? { ...current, name: event.target.value } : current)} placeholder="Product name" />
+        <label className="field product-description-field"><span>Product description</span><textarea name="description" className="input" value={newProduct.description} onChange={(event) => setNewProduct((current) => current ? { ...current, description: event.target.value } : current)} placeholder="Brand, size, flavor, packaging, or other product details" rows={3} /></label>
+        <label className="product-image-upload"><span><Camera size={19}/><b>Take or upload product photo</b><small>Use your camera or choose an image from the device.</small></span><input type="file" accept="image/*" capture="environment" onChange={(event) => { const file = event.target.files?.[0] ?? null; setNewProduct((current) => { if (!current) return current; if (current.imagePreview) URL.revokeObjectURL(current.imagePreview); return { ...current, imageFile: file, imagePreview: file ? URL.createObjectURL(file) : null }; }); }} /></label>
         <Field label="Selling price" name="price" required inputMode="decimal" placeholder="0.00" />
         <SelectField label="Minimum threshold" name="minimumStock" defaultValue="5">
           <option value="0">0</option>{quantityOptions.map((amount) => <option value={amount} key={amount}>{amount}</option>)}
@@ -712,7 +737,7 @@ export function InventoryView({ context }: { context: BusinessContext }) {
           <option value="0">0</option>{quantityOptions.map((amount) => <option value={amount} key={amount}>{amount}</option>)}
         </SelectField>
         <Field label="Barcode" name="barcode" value={newProduct.barcode} readOnly />
-        <div className="inline-form-actions"><Button type="button" variant="ghost" onClick={() => { inventoryScanSequence.current += 1; setLookupBusy(false); setNewProduct(null); setMessage(""); }}>Cancel</Button><Button type="submit" loading={busy} disabled={lookupBusy}>Add product</Button></div>
+        <div className="inline-form-actions"><Button type="button" variant="ghost" onClick={() => { inventoryScanSequence.current += 1; setLookupBusy(false); if (newProduct.imagePreview) URL.revokeObjectURL(newProduct.imagePreview); setNewProduct(null); setMessage(""); }}>Cancel</Button><Button type="submit" loading={busy} disabled={lookupBusy}>Add product</Button></div>
       </form>}
       {selected && <div className="barcode-product-preview inventory-scan-result">
         {selectedImage ? <img src={selectedImage} alt={`${selected.name} package`} /> : <span className="barcode-product-placeholder"><Package /></span>}

@@ -1,6 +1,7 @@
 export type Product = {
   id: string
   name: string
+  description: string | null
   sku: string | null
   price_centavos: number
   cost_centavos: number

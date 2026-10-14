@@ -719,3 +719,12 @@ body .landing-pwa-install{
 .pwa-update-prompt{position:fixed;right:18px;bottom:18px;z-index:200;display:flex;align-items:center;gap:14px;max-width:calc(100vw - 36px);padding:12px 14px;border:1px solid #bde8dc;border-radius:13px;background:#fff;color:#142d4e;box-shadow:0 12px 35px rgba(8,45,38,.2);font-size:.78rem;font-weight:700}
 .pwa-update-prompt button{border:0;border-radius:8px;padding:8px 12px;background:#0a8064;color:#fff;font:inherit;cursor:pointer}
 @media(max-width:430px){.pwa-update-prompt{right:12px;bottom:12px;left:12px;justify-content:space-between;max-width:none}}
+
+.inventory-new-product-form .product-description-field{grid-column:1/-1}
+.inventory-new-product-form textarea.input{height:auto;min-height:88px;padding-block:11px;resize:vertical}
+.product-image-upload{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px;border:1px dashed #9dcfc3;border-radius:12px;background:#f2fbf8;cursor:pointer}
+.product-image-upload>span{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:3px 9px;color:var(--navy)}
+.product-image-upload svg{grid-row:1/3;color:var(--green)}
+.product-image-upload small{color:var(--muted);font-size:.64rem;font-weight:400}
+.product-image-upload input{max-width:220px;font-size:.68rem;color:var(--muted)}
+@media(max-width:520px){.product-image-upload{align-items:stretch;flex-direction:column}.product-image-upload input{max-width:100%;width:100%}}
