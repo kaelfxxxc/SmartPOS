@@ -10,9 +10,10 @@ import siteConfiguration from './.figma/make/site.json'
 export default defineConfig(({ mode }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
+  const base = process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/'
 
   return {
-    base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
+    base,
     build: {
       sourcemap: emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,
@@ -20,7 +21,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
 react(),
       tailwindcss(),
-      figmaSiteConfiguration(siteConfiguration),
+      figmaSiteConfiguration(siteConfiguration, base),
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: '/src/**/*.stories.{ts,tsx,js,jsx}' }),
@@ -75,7 +76,7 @@ type FigmaSiteConfiguration = {
 }
 
 /** Applies /.figma/make/site.json to the generated document shell. */
-function figmaSiteConfiguration(config: FigmaSiteConfiguration): Plugin {
+function figmaSiteConfiguration(config: FigmaSiteConfiguration, base: string): Plugin {
   function sanitizeHtmlValue(value: string | undefined): string {
     return value?.replace(/[^a-zA-Z0-9_-]/g, '') || ''
   }
@@ -137,7 +138,10 @@ function figmaSiteConfiguration(config: FigmaSiteConfiguration): Plugin {
           tags.push({ tag: 'meta', attrs: { name: 'robots', content: 'noindex, nofollow' }, injectTo: 'head' })
         }
         if (favicon) {
-          tags.push({ tag: 'link', attrs: { rel: 'icon', href: favicon }, injectTo: 'head' })
+          const iconHref = /^https?:\/\//.test(favicon)
+            ? favicon
+            : `${base}${favicon.replace(/^\//, '')}`
+          tags.push({ tag: 'link', attrs: { rel: 'icon', href: iconHref }, injectTo: 'head' })
         }
         if (title) {
           tags.push({ tag: 'meta', attrs: { property: 'og:title', content: title }, injectTo: 'head' })
