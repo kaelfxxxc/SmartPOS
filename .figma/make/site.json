@@ -1,0 +1,14 @@
+{
+  "title": "SmartPOS — Your AI-native POS",
+  "description": "Streamline sales and inventory management for Philippine businesses with an intuitive, offline-capable POS system designed for small to medium retail establishments.",
+  "icons": {
+    "icon": "/brand/smartpos-favicon.png"
+  },
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
