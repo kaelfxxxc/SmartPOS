@@ -1,4 +1,4 @@
-import { Printer, X } from "lucide-react"
+import { CheckCircle2, Package, Printer, X } from "lucide-react"
 import { Button } from "@/components/ui"
 import { peso, type BusinessContext, type Product } from "@/features/workspace/types"
 
@@ -25,6 +25,22 @@ export default function ReceiptDialog({
   return (
     <div className="receipt-overlay" role="dialog" aria-modal="true" aria-label="Internal sales receipt">
       <div className="receipt-shell">
+        <section className="checkout-success" aria-labelledby="checkout-success-title">
+          <CheckCircle2 />
+          <div>
+            <h2 id="checkout-success-title">Sale completed successfully</h2>
+            <p>Inventory was updated and the purchased quantities were deducted.</p>
+          </div>
+        </section>
+        <div className="checkout-success-products">
+          {receipt.lines.map(({ product, quantity }) => (
+            <article key={product.id}>
+              {product.image_path ? <img src={product.image_path} alt="" /> : <span><Package /></span>}
+              <div><b>{product.name}</b><small>{quantity} × {product.unit} checked out</small></div>
+              <strong>{peso(product.price_centavos * quantity)}</strong>
+            </article>
+          ))}
+        </div>
         <div className="receipt-actions">
           <Button variant="secondary" onClick={() => window.print()}><Printer size={17}/> Print receipt</Button>
           <Button variant="ghost" onClick={onClose}><X size={17}/> Close</Button>

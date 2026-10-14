@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  Package,
   Search,
   Settings,
   ShoppingCart,
@@ -28,7 +27,6 @@ import {
   NotificationsView,
   PeopleView,
   PosView,
-  ProductsView,
   SalesView,
   SettingsView,
 } from "./WorkspaceViews"
@@ -37,7 +35,6 @@ import type { BusinessContext, WorkspaceView } from "./types"
 const nav = [
   [LayoutDashboard, "Dashboard", "dashboard"],
   [ShoppingCart, "POS / Checkout", "pos"],
-  [Package, "Products", "products"],
   [Boxes, "Inventory", "inventory"],
   [CircleDollarSign, "Sales & Reports", "sales"],
   [CreditCard, "Utang / Credit", "credit"],
@@ -161,7 +158,7 @@ export default function WorkspacePage() {
           <Button
             variant="ghost"
             className="global-search"
-            onClick={() => changeView("products")}
+            onClick={() => changeView("inventory")}
           >
             <Search size={18} />
             <span>Search products and inventory…</span>
@@ -201,9 +198,6 @@ export default function WorkspacePage() {
             <DashboardView context={context} onNavigate={changeView} />
           )}
           {context && view === "pos" && <PosView context={context} />}
-          {context && view === "products" && (
-            <ProductsView context={context} />
-          )}
           {context && view === "inventory" && (
             <InventoryView context={context} />
           )}

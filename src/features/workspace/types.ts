@@ -5,6 +5,8 @@ export type Product = {
   price_centavos: number
   cost_centavos: number
   minimum_stock: number
+  unit: string
+  image_path: string | null
   status: "active" | "archived"
   product_barcodes: Array<{ barcode: string; is_primary: boolean }>
   inventory_balances: Array<{ confirmed_quantity: number }>
@@ -21,7 +23,6 @@ export type BusinessContext = {
 export type WorkspaceView =
   | "dashboard"
   | "pos"
-  | "products"
   | "inventory"
   | "sales"
   | "credit"

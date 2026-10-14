@@ -17,8 +17,9 @@ import {
   Trash2,
   UserPlus,
   Users,
+  X,
 } from "lucide-react"
-import { Button, Field } from "@/components/ui"
+import { Button, Field, SelectField } from "@/components/ui"
 import { lookupOpenFoodFactsProduct } from "@/lib/openFoodFacts"
 import { supabase } from "@/lib/supabase/client"
 import BarcodeScanner from "@/features/barcode/BarcodeScanner"
@@ -39,7 +40,7 @@ function useProducts(context: BusinessContext, search = "") {
       let query = supabase
         .from("products")
         .select(
-          "id,name,sku,price_centavos,cost_centavos,minimum_stock,status,product_barcodes(barcode,is_primary),inventory_balances(confirmed_quantity,branch_id)",
+          "id,name,sku,unit,image_path,price_centavos,cost_centavos,minimum_stock,status,product_barcodes(barcode,is_primary),inventory_balances(confirmed_quantity,branch_id)",
         )
         .eq("business_id", context.businessId)
         .eq("status", "active")
@@ -81,7 +82,7 @@ export function DashboardView({
   onNavigate,
 }: {
   context: BusinessContext
-  onNavigate: (view: "products" | "pos") => void
+  onNavigate: (view: "inventory" | "pos") => void
 }) {
   const products = useProducts(context)
   const sales = useQuery({
@@ -184,7 +185,7 @@ export function DashboardView({
             <b>Add your first product</b>
             <p>Create a product and opening stock before checkout.</p>
           </div>
-          <Button variant="secondary" onClick={() => onNavigate("products")}>
+          <Button variant="secondary" onClick={() => onNavigate("inventory")}>
             Add first product
           </Button>
         </div>
@@ -250,10 +251,10 @@ export function DashboardView({
               <p>Continue running your store</p>
             </div>
           </div>
-          <Button variant="ghost" className="task" onClick={() => onNavigate("products")}>
+          <Button variant="ghost" className="task" onClick={() => onNavigate("inventory")}>
             <span>1</span><b>Add products and prices</b><ArrowRight size={17} />
           </Button>
-          <Button variant="ghost" className="task" onClick={() => onNavigate("products")}>
+          <Button variant="ghost" className="task" onClick={() => onNavigate("inventory")}>
             <span>2</span><b>Receive opening stock</b><ArrowRight size={17} />
           </Button>
           <Button variant="ghost" className="task" onClick={() => onNavigate("pos")}>
@@ -304,6 +305,7 @@ export function ProductsView({ context }: { context: BusinessContext }) {
     }
 
     setBarcode(normalized)
+    setProductImage(null)
     setOpen(true)
     setMessage(`Looking up barcode ${normalized} in Open Food Facts…`)
     const sequence = ++lookupSequence.current
@@ -319,6 +321,7 @@ export function ProductsView({ context }: { context: BusinessContext }) {
           "Product details found via Open Food Facts. Confirm the name and enter your store prices.",
         )
       } else {
+        setProductImage(null)
         setMessage(
           `Barcode ${normalized} was not found in Open Food Facts. Enter the product details manually.`,
         )
@@ -469,10 +472,18 @@ export function InventoryView({ context }: { context: BusinessContext }) {
   const products = useProducts(context)
   const [selected, setSelected] = useState<Product | null>(null)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [newProduct, setNewProduct] = useState<{
+    barcode: string
+    name: string
+    imageUrl: string | null
+  } | null>(null)
   const inventoryScanSequence = useRef(0)
   const [quantity, setQuantity] = useState("")
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
+  const [lookupBusy, setLookupBusy] = useState(false)
+
+  const quantityOptions = [1, 2, 3, 5, 10, 12, 20, 24, 25, 50, 100]
 
   async function receive() {
     const amount = Number(quantity)
@@ -495,6 +506,52 @@ export function InventoryView({ context }: { context: BusinessContext }) {
     await queryClient.invalidateQueries({ queryKey: ["products"] })
   }
 
+  async function addScannedProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!newProduct) return
+    const values = new FormData(event.currentTarget)
+    const price = parseCentavos(String(values.get("price")))
+    const minimumStock = Number(values.get("minimumStock"))
+    const openingQuantity = Number(values.get("openingQuantity"))
+    const name = String(values.get("name")).trim()
+    if (!name || price === null || !Number.isFinite(minimumStock) || minimumStock < 0 || !Number.isFinite(openingQuantity) || openingQuantity < 0) {
+      return setMessage("Enter valid product details, price, threshold, and quantity.")
+    }
+
+    setBusy(true)
+    setMessage("")
+    const { data: productId, error } = await supabase.rpc("create_product_with_barcode", {
+      p_business_id: context.businessId,
+      p_branch_id: context.branchId,
+      p_name: name,
+      p_sku: "",
+      p_barcode: newProduct.barcode,
+      p_price_centavos: price,
+      p_cost_centavos: 0,
+      p_opening_quantity: openingQuantity,
+      p_idempotency_key: crypto.randomUUID(),
+    })
+    if (error) {
+      setBusy(false)
+      return setMessage(error.message)
+    }
+    const { error: detailsError } = await supabase
+      .from("products")
+      .update({
+        unit: String(values.get("unit")),
+        minimum_stock: minimumStock,
+        image_path: newProduct.imageUrl,
+      })
+      .eq("id", productId)
+      .eq("business_id", context.businessId)
+    setBusy(false)
+    if (detailsError) return setMessage(detailsError.message)
+    setMessage(`${name} was added to inventory.`)
+    setNewProduct(null)
+    setQuantity("")
+    await queryClient.invalidateQueries({ queryKey: ["products"] })
+  }
+
   return (
     <section>
       <div className="dashboard-title"><div><span className="eyebrow">Stock control</span><h1>Inventory</h1><p>Receive stock only after confirmation.</p></div></div>
@@ -505,15 +562,36 @@ export function InventoryView({ context }: { context: BusinessContext }) {
             item.product_barcodes.some((barcode) => barcode.barcode === value),
           )
           if (!product) {
-            inventoryScanSequence.current += 1
+            const sequence = ++inventoryScanSequence.current
             setSelected(null)
             setSelectedImage(null)
-            return setMessage(`No product found for barcode ${value}.`)
+            setNewProduct({ barcode: value, name: "", imageUrl: null })
+            setLookupBusy(true)
+            setMessage(`Barcode ${value} is new. Looking up product information…`)
+            try {
+              const details = await lookupOpenFoodFactsProduct(value)
+              if (sequence !== inventoryScanSequence.current) return
+              setNewProduct({
+                barcode: value,
+                name: details?.name ?? "",
+                imageUrl: details?.imageUrl ?? null,
+              })
+              setMessage(details ? "Product information found. Confirm the details below." : "Barcode scanned successfully. Enter the product details below.")
+            } catch {
+              if (sequence !== inventoryScanSequence.current) return
+              setMessage("Barcode scanned successfully. Product lookup is unavailable, so enter the details below.")
+            } finally {
+              if (sequence === inventoryScanSequence.current) setLookupBusy(false)
+            }
+            return
           }
+          setLookupBusy(false)
+          setNewProduct(null)
           setSelected(product)
-          setSelectedImage(null)
+          setSelectedImage(product.image_path)
           setMessage(`${product.name} found. Enter stock quantity to confirm.`)
           const sequence = ++inventoryScanSequence.current
+          if (product.image_path) return
           try {
             const details = await lookupOpenFoodFactsProduct(value)
             if (sequence === inventoryScanSequence.current) setSelectedImage(details?.imageUrl ?? null)
@@ -523,11 +601,30 @@ export function InventoryView({ context }: { context: BusinessContext }) {
         }}
       />
       {message && <div className="form-message workspace-message">{message}</div>}
+      {newProduct && <form className="inline-form inventory-new-product-form panel" onSubmit={addScannedProduct}>
+        <div className="barcode-product-preview">
+          {newProduct.imageUrl ? <img src={newProduct.imageUrl} alt={`${newProduct.name || "Scanned product"} package`} /> : <span className="barcode-product-placeholder"><Package /></span>}
+          <div><b>{newProduct.name || "New scanned product"}</b><small>Barcode: {newProduct.barcode}</small><span className="image-source-copy">{newProduct.imageUrl ? "Product image found" : "No product image available"}</span></div>
+        </div>
+        <Field label="Product name" name="name" required value={newProduct.name} onChange={(event) => setNewProduct((current) => current ? { ...current, name: event.target.value } : current)} placeholder="Product name" />
+        <Field label="Selling price" name="price" required inputMode="decimal" placeholder="0.00" />
+        <SelectField label="Minimum threshold" name="minimumStock" defaultValue="5">
+          <option value="0">0</option>{quantityOptions.map((amount) => <option value={amount} key={amount}>{amount}</option>)}
+        </SelectField>
+        <SelectField label="Unit" name="unit" defaultValue="piece">
+          <option value="piece">Piece</option><option value="pack">Pack</option><option value="box">Box</option><option value="bottle">Bottle</option><option value="kilogram">Kilogram</option><option value="liter">Liter</option>
+        </SelectField>
+        <SelectField label="Opening quantity" name="openingQuantity" defaultValue="1">
+          <option value="0">0</option>{quantityOptions.map((amount) => <option value={amount} key={amount}>{amount}</option>)}
+        </SelectField>
+        <Field label="Barcode" name="barcode" value={newProduct.barcode} readOnly />
+        <div className="inline-form-actions"><Button type="button" variant="ghost" onClick={() => { inventoryScanSequence.current += 1; setLookupBusy(false); setNewProduct(null); setMessage(""); }}>Cancel</Button><Button type="submit" loading={busy} disabled={lookupBusy}>Add product</Button></div>
+      </form>}
       {selected && <div className="barcode-product-preview inventory-scan-result">
         {selectedImage ? <img src={selectedImage} alt={`${selected.name} package`} /> : <span className="barcode-product-placeholder"><Package /></span>}
         <div><b>{selected.name}</b><small>Barcode: {selected.product_barcodes[0]?.barcode || "Not assigned"}</small><strong>{Number(selected.inventory_balances[0]?.confirmed_quantity ?? 0)} currently in stock</strong></div>
       </div>}
-      {selected && <div className="receive-panel panel"><div><b>Receive {selected.name}</b><small>Current stock: {Number(selected.inventory_balances[0]?.confirmed_quantity ?? 0)}</small></div><Field label="Quantity to add" value={quantity} onChange={(e) => setQuantity(e.target.value)} type="number" min="0.001" step="0.001" /><Button variant="ghost" onClick={() => { inventoryScanSequence.current += 1; setSelected(null); setSelectedImage(null); }}>Cancel</Button><Button loading={busy} onClick={receive}>Confirm stock</Button></div>}
+      {selected && <div className="receive-panel panel"><div><b>Receive {selected.name}</b><small>Current stock: {Number(selected.inventory_balances[0]?.confirmed_quantity ?? 0)} {selected.unit}</small></div><SelectField label="Quantity to add" value={quantity} onChange={(e) => setQuantity(e.target.value)}><option value="">Select quantity</option>{quantityOptions.map((amount) => <option value={amount} key={amount}>{amount}</option>)}</SelectField><Button variant="ghost" onClick={() => { inventoryScanSequence.current += 1; setSelected(null); setSelectedImage(null); }}>Cancel</Button><Button loading={busy} onClick={receive}>Add stock</Button></div>}
       {products.data?.length ? <div className="inventory-grid">{products.data.map((product) => <article className="inventory-card" key={product.id}><span className="inventory-icon"><Package /></span><div><b>{product.name}</b><small>{product.sku || "No SKU"}</small></div><strong>{Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)}</strong><Button variant="secondary" onClick={() => { inventoryScanSequence.current += 1; setSelectedImage(null); setSelected(product); setMessage(""); }}>Add stock</Button></article>)}</div> : !products.isLoading && <Empty icon={Package} title="No inventory yet" copy="Create a product before receiving stock." />}
     </section>
   )
@@ -544,6 +641,7 @@ export function PosView({ context }: { context: BusinessContext }) {
   const [message, setMessage] = useState("")
   const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
   const [scannedImage, setScannedImage] = useState<string | null>(null)
+  const [cartOpen, setCartOpen] = useState(false)
   const scanSequence = useRef(0)
   const [busy, setBusy] = useState(false)
   const [receipt, setReceipt] = useState<{
@@ -555,6 +653,7 @@ export function PosView({ context }: { context: BusinessContext }) {
     lines: CartLine[]
   } | null>(null)
   const lines = Object.values(cart)
+  const cartItemCount = lines.reduce((sum, line) => sum + line.quantity, 0)
   const visibleProducts = (products.data ?? []).filter((product) =>
     `${product.name} ${product.sku ?? ""} ${product.product_barcodes[0]?.barcode ?? ""}`
       .toLowerCase()
@@ -587,32 +686,40 @@ export function PosView({ context }: { context: BusinessContext }) {
       p_tendered_centavos: cash,
       p_idempotency_key: crypto.randomUUID(),
     })
-    setBusy(false)
-    if (error) return setMessage(error.message)
+    if (error) {
+      setBusy(false)
+      return setMessage(error.message)
+    }
     const result = data as {
       receipt_number: string
       total_centavos: number
       change_centavos: number
     }
-    setReceipt({
+    const completedReceipt = {
       ...result,
       tendered_centavos: cash,
       completed_at: new Date().toISOString(),
       lines,
-    })
-    setCart({})
-    setTendered("")
+    }
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["products"] }),
       queryClient.invalidateQueries({ queryKey: ["dashboard-sales"] }),
       queryClient.invalidateQueries({ queryKey: ["sales"] }),
     ])
+    setReceipt(completedReceipt)
+    setCart({})
+    setTendered("")
+    setScannedProduct(null)
+    setScannedImage(null)
+    setCartOpen(false)
+    setBusy(false)
   }
 
   return (
     <section className="pos-page">
       <div className="dashboard-title"><div><span className="eyebrow">Fast checkout</span><h1>POS / Checkout</h1></div></div>
       {receipt && <ReceiptDialog context={context} receipt={receipt} onClose={() => setReceipt(null)} />}
+      {cartOpen && <button className="mobile-cart-scrim" aria-label="Close basket" onClick={() => setCartOpen(false)} />}
       <div className="pos-layout">
         <div className="product-browser panel">
           <BarcodeScanner
@@ -628,9 +735,10 @@ export function PosView({ context }: { context: BusinessContext }) {
                 return setMessage(`Product not found for barcode ${value}.`)
               }
               setScannedProduct(product)
-              setScannedImage(null)
+              setScannedImage(product.image_path)
               setQuantity(product, (cart[product.id]?.quantity ?? 0) + 1)
               const sequence = ++scanSequence.current
+              if (product.image_path) return
               try {
                 const details = await lookupOpenFoodFactsProduct(value)
                 if (sequence === scanSequence.current) setScannedImage(details?.imageUrl ?? null)
@@ -653,8 +761,8 @@ export function PosView({ context }: { context: BusinessContext }) {
           </div>
           {!products.isLoading && !visibleProducts.length && <Empty icon={Search} title="No matching products" copy="Add products or try another search." />}
         </div>
-        <aside className="cart-panel panel">
-          <div className="cart-heading"><div><ShoppingCart/><b>Active basket</b></div><Button variant="ghost" disabled={!lines.length} onClick={() => setCart({})}><Trash2 size={17}/> Clear</Button></div>
+        <aside className={`cart-panel panel ${cartOpen ? "mobile-cart-open" : ""}`} aria-label="Checkout basket">
+          <div className="cart-heading"><div><ShoppingCart/><b>Active basket</b><span className="cart-heading-count">{cartItemCount}</span></div><div className="cart-heading-actions"><Button variant="ghost" disabled={!lines.length} onClick={() => setCart({})}><Trash2 size={17}/> Clear</Button><Button variant="ghost" className="mobile-cart-close" aria-label="Close basket" onClick={() => setCartOpen(false)}><X size={19}/></Button></div></div>
           <div className="cart-lines">
             {lines.map(({ product, quantity }) => <div className="cart-line" key={product.id}><div><b>{product.name}</b><small>{peso(product.price_centavos)} each</small></div><div className="quantity-control"><Button variant="ghost" onClick={() => setQuantity(product, quantity - 1)}><Minus size={15}/></Button><span>{quantity}</span><Button variant="ghost" onClick={() => setQuantity(product, quantity + 1)}><Plus size={15}/></Button></div><strong>{peso(product.price_centavos * quantity)}</strong></div>)}
             {!lines.length && <Empty icon={ShoppingCart} title="Basket is empty" copy="Choose a product to begin." />}
@@ -665,6 +773,11 @@ export function PosView({ context }: { context: BusinessContext }) {
           <Button className="checkout-button" loading={busy} disabled={!lines.length} onClick={checkout}>Complete cash sale</Button>
         </aside>
       </div>
+      <Button className="mobile-cart-trigger" onClick={() => setCartOpen(true)} aria-label={`Open basket with ${cartItemCount} items`}>
+        <span className="mobile-cart-icon"><ShoppingCart size={21}/>{cartItemCount > 0 && <b>{cartItemCount}</b>}</span>
+        <span>View basket</span>
+        <strong>{peso(total)}</strong>
+      </Button>
     </section>
   )
 }
