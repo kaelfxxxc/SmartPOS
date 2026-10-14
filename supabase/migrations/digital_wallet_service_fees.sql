@@ -1,0 +1,115 @@
+-- Add cash-in and cash-out service fees with per-wallet profit tracking.
+begin;
+
+alter table public.digital_wallet_ledger_entries
+  add column service_fee_centavos bigint not null default 0
+  check (service_fee_centavos >= 0);
+
+alter table public.digital_wallet_balances
+  add column profit_centavos bigint not null default 0
+  check (profit_centavos >= 0);
+
+drop function if exists public.record_digital_wallet_transaction(uuid,uuid,text,text,bigint,text,text,uuid);
+
+create or replace function public.record_digital_wallet_transaction(
+  p_business_id uuid,
+  p_branch_id uuid,
+  p_wallet_provider text,
+  p_transaction_type text,
+  p_amount_centavos bigint,
+  p_service_fee_centavos bigint,
+  p_reference text,
+  p_notes text,
+  p_idempotency_key uuid
+) returns bigint
+language plpgsql security definer set search_path = public as $$
+declare
+  v_balance bigint;
+begin
+  if not public.has_business_role(
+    p_business_id,
+    array['owner','admin','manager','cashier']::public.member_role[]
+  ) or not public.can_access_branch(p_business_id, p_branch_id)
+    or not exists (
+      select 1 from public.branches
+      where id = p_branch_id and business_id = p_business_id and is_active = true
+    ) then
+    raise exception 'Not authorized';
+  end if;
+
+  if p_wallet_provider not in ('gcash', 'maya') then
+    raise exception 'Invalid wallet provider';
+  end if;
+  if p_transaction_type not in ('cash_in', 'cash_out') then
+    raise exception 'Invalid transaction type';
+  end if;
+  if p_amount_centavos <= 0 then
+    raise exception 'Amount must be positive';
+  end if;
+  if p_service_fee_centavos < 0 then
+    raise exception 'Service fee cannot be negative';
+  end if;
+  insert into public.digital_wallet_balances (
+    business_id, branch_id, wallet_provider, balance_centavos, profit_centavos
+  ) values (
+    p_business_id, p_branch_id, p_wallet_provider, 0, 0
+  ) on conflict (branch_id, wallet_provider) do nothing;
+
+  select balance_centavos into v_balance
+  from public.digital_wallet_balances
+  where business_id = p_business_id
+    and branch_id = p_branch_id
+    and wallet_provider = p_wallet_provider
+  for update;
+
+  if p_transaction_type = 'cash_out' and p_amount_centavos > v_balance then
+    raise exception 'Cash out exceeds the current wallet balance';
+  end if;
+
+  insert into public.digital_wallet_ledger_entries (
+    business_id, branch_id, wallet_provider, transaction_type,
+    amount_centavos, service_fee_centavos, reference, notes,
+    staff_user_id, idempotency_key
+  ) values (
+    p_business_id, p_branch_id, p_wallet_provider, p_transaction_type,
+    p_amount_centavos, p_service_fee_centavos,
+    nullif(trim(p_reference), ''), nullif(trim(p_notes), ''),
+    auth.uid(), p_idempotency_key
+  );
+
+  if p_transaction_type = 'cash_in' then
+    v_balance := v_balance + p_amount_centavos;
+  else
+    v_balance := v_balance - p_amount_centavos;
+  end if;
+
+  update public.digital_wallet_balances
+  set balance_centavos = v_balance,
+      profit_centavos = profit_centavos + p_service_fee_centavos,
+      updated_at = now()
+  where business_id = p_business_id
+    and branch_id = p_branch_id
+    and wallet_provider = p_wallet_provider;
+
+  insert into public.audit_logs (
+    business_id, branch_id, actor_user_id, action, entity_type, new_values
+  ) values (
+    p_business_id, p_branch_id, auth.uid(),
+    'digital_wallet.' || p_transaction_type,
+    'digital_wallet_ledger_entry',
+    jsonb_build_object(
+      'wallet_provider', p_wallet_provider,
+      'amount_centavos', p_amount_centavos,
+      'service_fee_centavos', p_service_fee_centavos,
+      'balance_centavos', v_balance
+    )
+  );
+
+  return v_balance;
+end;
+$$;
+
+revoke all on function public.record_digital_wallet_transaction(uuid,uuid,text,text,bigint,bigint,text,text,uuid) from public;
+grant execute on function public.record_digital_wallet_transaction(uuid,uuid,text,text,bigint,bigint,text,text,uuid) to authenticated;
+
+commit;

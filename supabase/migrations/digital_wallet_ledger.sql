@@ -16,13 +16,27 @@ create table public.digital_wallet_ledger_entries (
   unique (business_id, idempotency_key)
 );
 
+create table public.digital_wallet_balances (
+  business_id uuid not null references public.businesses(id),
+  branch_id uuid not null references public.branches(id),
+  wallet_provider text not null check (wallet_provider in ('gcash', 'maya')),
+  balance_centavos bigint not null default 0 check (balance_centavos >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (branch_id, wallet_provider)
+);
+
 create index digital_wallet_branch_time_idx
   on public.digital_wallet_ledger_entries(branch_id, created_at desc);
 
 alter table public.digital_wallet_ledger_entries enable row level security;
+alter table public.digital_wallet_balances enable row level security;
 
 create policy digital_wallet_member_select
   on public.digital_wallet_ledger_entries for select
+  using (public.can_access_branch(business_id, branch_id));
+
+create policy digital_wallet_balances_member_select
+  on public.digital_wallet_balances for select
   using (public.can_access_branch(business_id, branch_id));
 
 create or replace function public.record_digital_wallet_transaction(
@@ -42,7 +56,11 @@ begin
   if not public.has_business_role(
     p_business_id,
     array['owner','admin','manager','cashier']::public.member_role[]
-  ) or not public.can_access_branch(p_business_id, p_branch_id) then
+  ) or not public.can_access_branch(p_business_id, p_branch_id)
+    or not exists (
+      select 1 from public.branches
+      where id = p_branch_id and business_id = p_business_id and is_active = true
+    ) then
     raise exception 'Not authorized';
   end if;
 
@@ -56,18 +74,18 @@ begin
     raise exception 'Amount must be positive';
   end if;
 
-  perform pg_advisory_xact_lock(
-    hashtextextended(p_business_id::text || p_branch_id::text || p_wallet_provider, 0)
-  );
+  insert into public.digital_wallet_balances (
+    business_id, branch_id, wallet_provider, balance_centavos
+  ) values (
+    p_business_id, p_branch_id, p_wallet_provider, 0
+  ) on conflict (branch_id, wallet_provider) do nothing;
 
-  select coalesce(sum(
-    case when transaction_type = 'cash_in' then amount_centavos else -amount_centavos end
-  ), 0)
-  into v_balance
-  from public.digital_wallet_ledger_entries
+  select balance_centavos into v_balance
+  from public.digital_wallet_balances
   where business_id = p_business_id
     and branch_id = p_branch_id
-    and wallet_provider = p_wallet_provider;
+    and wallet_provider = p_wallet_provider
+  for update;
 
   if p_transaction_type = 'cash_out' and p_amount_centavos > v_balance then
     raise exception 'Cash out exceeds the current wallet balance';
@@ -87,6 +105,12 @@ begin
   else
     v_balance := v_balance - p_amount_centavos;
   end if;
+
+  update public.digital_wallet_balances
+  set balance_centavos = v_balance, updated_at = now()
+  where business_id = p_business_id
+    and branch_id = p_branch_id
+    and wallet_provider = p_wallet_provider;
 
   insert into public.audit_logs (
     business_id, branch_id, actor_user_id, action, entity_type, new_values

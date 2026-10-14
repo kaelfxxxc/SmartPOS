@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  ArrowDownLeft,
   ArrowRight,
+  ArrowUpRight,
   Archive,
   Bell,
   CheckCircle2,
@@ -18,6 +20,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  WalletCards,
   X,
 } from "lucide-react"
 import { Button, Field, SelectField } from "@/components/ui"
@@ -915,6 +918,145 @@ export function SalesView({ context }: { context: BusinessContext }) {
     <div className="report-section-heading"><div><h2>Remaining inventory</h2><p>Current confirmed quantities for this branch.</p></div></div>
     {products.data?.length ? <div className="inventory-report-grid">{products.data.map((product) => { const stock = Number(product.inventory_balances[0]?.confirmed_quantity ?? 0); return <article key={product.id}><div>{product.image_path ? <img src={product.image_path} alt="" /> : <span><Package size={18} /></span>}<div><b>{product.name}</b><small>{product.sku || "No SKU"}</small></div></div><strong>{stock} {product.unit}</strong><em className={stock <= Number(product.minimum_stock) ? "low" : "healthy"}>{stock <= Number(product.minimum_stock) ? "Low stock" : "In stock"}</em></article> })}</div> : !products.isLoading && <Empty icon={Package} title="No inventory records" copy="Products and remaining stock will appear here." />}
   </section>
+}
+
+type WalletLedgerEntry = {
+  id: string
+  wallet_provider: "gcash" | "maya"
+  transaction_type: "cash_in" | "cash_out"
+  amount_centavos: number
+  service_fee_centavos: number
+  reference: string | null
+  notes: string | null
+  created_at: string
+}
+
+export function DigitalLedgerView({ context }: { context: BusinessContext }) {
+  const queryClient = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState("")
+  const [selectedWallet, setSelectedWallet] = useState<WalletLedgerEntry["wallet_provider"]>("gcash")
+  const [selectedTransaction, setSelectedTransaction] = useState<WalletLedgerEntry["transaction_type"]>("cash_in")
+  const [referenceDraft, setReferenceDraft] = useState("")
+  const [referenceSearch, setReferenceSearch] = useState("")
+  const transactionFormRef = useRef<HTMLFormElement>(null)
+  const entries = useQuery({
+    queryKey: ["digital-wallet-ledger", context.branchId, referenceSearch],
+    queryFn: async () => {
+      let query = supabase
+        .from("digital_wallet_ledger_entries")
+        .select("id,wallet_provider,transaction_type,amount_centavos,service_fee_centavos,reference,notes,created_at")
+        .eq("business_id", context.businessId)
+        .eq("branch_id", context.branchId)
+        .order("created_at", { ascending: false })
+        .limit(100)
+      if (referenceSearch) query = query.ilike("reference", `%${referenceSearch}%`)
+      const { data, error } = await query
+      if (error) throw error
+      return (data ?? []) as WalletLedgerEntry[]
+    },
+  })
+  const balances = useQuery({
+    queryKey: ["digital-wallet-balances", context.branchId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("digital_wallet_balances")
+        .select("wallet_provider,balance_centavos,profit_centavos")
+        .eq("business_id", context.businessId)
+        .eq("branch_id", context.branchId)
+      if (error) throw error
+      return data ?? []
+    },
+  })
+  const balance = (provider: WalletLedgerEntry["wallet_provider"]) =>
+    Number(balances.data?.find((item) => item.wallet_provider === provider)?.balance_centavos ?? 0)
+  const profit = (provider: WalletLedgerEntry["wallet_provider"]) =>
+    Number(balances.data?.find((item) => item.wallet_provider === provider)?.profit_centavos ?? 0)
+
+  function prepareTransaction(provider: WalletLedgerEntry["wallet_provider"], transactionType: WalletLedgerEntry["transaction_type"]) {
+    setSelectedWallet(provider)
+    setSelectedTransaction(transactionType)
+    setMessage("")
+    transactionFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+    requestAnimationFrame(() => transactionFormRef.current?.querySelector<HTMLInputElement>('input[name="amount"]')?.focus())
+  }
+
+  async function recordTransaction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setMessage("")
+    const form = event.currentTarget
+    const values = new FormData(form)
+    const amount = parseCentavos(String(values.get("amount") ?? ""))
+    const feeInput = String(values.get("serviceFee") ?? "").trim()
+    const serviceFee = feeInput ? parseCentavos(feeInput) : 0
+    if (!amount || amount <= 0) {
+      setMessage("Enter a valid amount greater than zero.")
+      return
+    }
+    if (serviceFee === null || serviceFee < 0) {
+      setMessage("Enter a valid service fee.")
+      return
+    }
+
+    setBusy(true)
+    const { error } = await supabase.rpc("record_digital_wallet_transaction", {
+      p_business_id: context.businessId,
+      p_branch_id: context.branchId,
+      p_wallet_provider: String(values.get("wallet")),
+      p_transaction_type: String(values.get("transactionType")),
+      p_amount_centavos: amount,
+      p_service_fee_centavos: serviceFee,
+      p_reference: String(values.get("reference") ?? ""),
+      p_notes: String(values.get("notes") ?? ""),
+      p_idempotency_key: crypto.randomUUID(),
+    })
+    setBusy(false)
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+    form.reset()
+    setMessage("Wallet transaction recorded.")
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["digital-wallet-ledger", context.branchId] }),
+      queryClient.invalidateQueries({ queryKey: ["digital-wallet-balances", context.branchId] }),
+    ])
+  }
+
+  return (
+    <section className="digital-ledger-page">
+      <div className="dashboard-title">
+        <div><span className="eyebrow">E-wallet records</span><h1>Digital Ledger</h1><p>Track GCash and Maya cash movements for this branch.</p></div>
+      </div>
+      <div className="wallet-balance-grid">
+        <article className="wallet-balance-card gcash"><span>G</span><div className="wallet-balance-copy"><small>Current GCash balance</small><strong>{peso(balance("gcash"))}</strong><em>Service-fee profit: {peso(profit("gcash"))}</em><div className="wallet-balance-actions"><Button type="button" onClick={() => prepareTransaction("gcash", "cash_in")}>Add money</Button><Button type="button" variant="secondary" onClick={() => prepareTransaction("gcash", "cash_out")}>Cash out</Button></div></div></article>
+        <article className="wallet-balance-card maya"><span>M</span><div className="wallet-balance-copy"><small>Current Maya balance</small><strong>{peso(balance("maya"))}</strong><em>Service-fee profit: {peso(profit("maya"))}</em><div className="wallet-balance-actions"><Button type="button" onClick={() => prepareTransaction("maya", "cash_in")}>Add money</Button><Button type="button" variant="secondary" onClick={() => prepareTransaction("maya", "cash_out")}>Cash out</Button></div></div></article>
+      </div>
+      <form ref={transactionFormRef} className="wallet-transaction-form panel" onSubmit={recordTransaction}>
+        <div className="wallet-form-heading"><WalletCards size={22} /><div><b>Record wallet movement</b><small>Add a confirmed transaction and its service fee.</small></div></div>
+        <SelectField label="Wallet" name="wallet" value={selectedWallet} onChange={(event) => setSelectedWallet(event.target.value as WalletLedgerEntry["wallet_provider"])}><option value="gcash">GCash</option><option value="maya">Maya</option></SelectField>
+        <SelectField label="Transaction" name="transactionType" value={selectedTransaction} onChange={(event) => setSelectedTransaction(event.target.value as WalletLedgerEntry["transaction_type"])}><option value="cash_in">Cash in</option><option value="cash_out">Cash out</option></SelectField>
+        <Field label="Amount" name="amount" inputMode="decimal" placeholder="0.00" required />
+        <Field label="Service fee (profit)" name="serviceFee" inputMode="decimal" placeholder="0.00" />
+        <Field label="Reference number" name="reference" placeholder="Optional reference" />
+        <Field label="Notes" name="notes" placeholder="Optional notes" />
+        <div className="wallet-form-actions"><Button type="submit" loading={busy}>Save transaction</Button></div>
+        {message && <div className="form-message wallet-form-message">{message}</div>}
+      </form>
+      <div className="report-section-heading wallet-activity-heading"><div><h2>Recent wallet activity</h2><p>Latest GCash and Maya transactions for {context.branchName}.</p></div><span>{entries.data?.length ?? 0} records</span></div>
+      <form className="wallet-reference-search" onSubmit={(event) => { event.preventDefault(); setReferenceSearch(referenceDraft.trim()) }}>
+        <label><Search size={18} /><input aria-label="Search reference number" value={referenceDraft} onChange={(event) => setReferenceDraft(event.target.value)} placeholder="Search reference number" /></label>
+        <Button type="submit">Search</Button>
+        {referenceSearch && <Button type="button" variant="ghost" onClick={() => { setReferenceDraft(""); setReferenceSearch("") }}>Clear</Button>}
+      </form>
+      {(entries.error || balances.error) && <div className="form-message">Unable to load the digital ledger. Apply the digital wallet migration and try again.</div>}
+      {entries.data?.length ? <div className="wallet-ledger-list">{entries.data.map((entry) => <article key={entry.id}>
+        <span className={`wallet-entry-icon ${entry.transaction_type}`}>{entry.transaction_type === "cash_in" ? <ArrowDownLeft size={19} /> : <ArrowUpRight size={19} />}</span>
+        <div><b>{entry.wallet_provider === "gcash" ? "GCash" : "Maya"} · {entry.transaction_type === "cash_in" ? "Cash in" : "Cash out"}</b><small>{new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" }).format(new Date(entry.created_at))}{entry.reference ? ` · Ref: ${entry.reference}` : ""}</small>{Number(entry.service_fee_centavos) > 0 && <small>Service fee profit: {peso(Number(entry.service_fee_centavos))}</small>}{entry.notes && <small>{entry.notes}</small>}</div>
+        <strong className={entry.transaction_type}>{entry.transaction_type === "cash_in" ? "+" : "−"}{peso(Number(entry.amount_centavos))}</strong>
+      </article>)}</div> : !entries.isLoading && !entries.error && <Empty icon={WalletCards} title={referenceSearch ? "No matching reference" : "No wallet activity yet"} copy={referenceSearch ? "Try another reference number or clear the search." : "Record your first GCash or Maya cash-in transaction."} />}
+    </section>
+  )
 }
 
 type Customer = {
