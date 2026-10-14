@@ -1209,6 +1209,18 @@ export function SettingsView({ context }: { context: BusinessContext }) {
   const queryClient = useQueryClient()
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
+  const subscription = useQuery({
+    queryKey: ["business-subscription", context.businessId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("business_subscriptions")
+        .select("plan,status,billing_cycle,trial_started_at,trial_ends_at,current_period_ends_at")
+        .eq("business_id", context.businessId)
+        .single()
+      if (error) throw error
+      return data
+    },
+  })
   const settings = useQuery({
     queryKey: ["settings", context.businessId],
     queryFn: async () => {
@@ -1234,7 +1246,9 @@ export function SettingsView({ context }: { context: BusinessContext }) {
     setMessage("Business settings saved.")
     await Promise.all([queryClient.invalidateQueries({ queryKey: ["settings"] }), queryClient.invalidateQueries({ queryKey: ["current-business"] })])
   }
-  return <section><div className="dashboard-title"><div><span className="eyebrow">Owner configuration</span><h1>Settings</h1><p>Business, tax, and internal receipt defaults.</p></div></div>{settings.isLoading ? <p className="loading-copy">Loading settings…</p> : settings.data && <form className="settings-form panel" onSubmit={save}><Field label="Business name" name="name" required defaultValue={settings.data.name}/><Field label="Contact number" name="contact" required defaultValue={settings.data.contact}/><Field label="Business address" name="address" required defaultValue={settings.data.address}/><label className="field"><span>Tax mode</span><select className="input" name="taxMode" defaultValue={settings.data.tax_mode}><option value="non_vat">Non-VAT</option><option value="vat_registered">VAT-registered</option></select></label><label className="field"><span>Receipt mode</span><select className="input" name="receiptMode" defaultValue={settings.data.receipt_mode}><option value="internal">Internal POS receipt</option><option value="configured_invoice">Configured invoice issuance</option></select></label><Field label="Receipt footer" name="footer" defaultValue={settings.data.receipt_footer}/><label className="checkbox-field settings-checkbox"><input type="checkbox" name="beginnerMode" defaultChecked={settings.data.beginner_mode}/><span>Use beginner-friendly interface mode</span></label>{message && <div className="form-message">{message}</div>}<div className="settings-actions"><Button type="submit" loading={busy}><Settings size={18}/> Save settings</Button></div></form>}</section>
+  const planName = subscription.data?.plan === "professional" ? "Professional" : subscription.data?.plan === "starter" ? "Starter" : "7-Day Free Trial"
+  const planEnd = subscription.data?.status === "trialing" ? subscription.data.trial_ends_at : subscription.data?.current_period_ends_at
+  return <section><div className="dashboard-title"><div><span className="eyebrow">Owner configuration</span><h1>Settings</h1><p>Business, tax, and internal receipt defaults.</p></div></div>{subscription.data && <article className="subscription-plan-card panel"><span><CreditCard size={23}/></span><div><small>Subscription plan</small><h2>{planName}</h2><p><b>{subscription.data.status}</b>{subscription.data.billing_cycle ? ` · ${subscription.data.billing_cycle} billing` : ""}{planEnd ? ` · Ends ${new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeZone: "Asia/Manila" }).format(new Date(planEnd))}` : ""}</p></div><em>{subscription.data.status}</em></article>}{subscription.error && <div className="form-message workspace-message">Apply the business subscription migration to view plan details.</div>}{settings.isLoading ? <p className="loading-copy">Loading settings…</p> : settings.data && <form className="settings-form panel" onSubmit={save}><Field label="Business name" name="name" required defaultValue={settings.data.name}/><Field label="Contact number" name="contact" required defaultValue={settings.data.contact}/><Field label="Business address" name="address" required defaultValue={settings.data.address}/><label className="field"><span>Tax mode</span><select className="input" name="taxMode" defaultValue={settings.data.tax_mode}><option value="non_vat">Non-VAT</option><option value="vat_registered">VAT-registered</option></select></label><label className="field"><span>Receipt mode</span><select className="input" name="receiptMode" defaultValue={settings.data.receipt_mode}><option value="internal">Internal POS receipt</option><option value="configured_invoice">Configured invoice issuance</option></select></label><Field label="Receipt footer" name="footer" defaultValue={settings.data.receipt_footer}/><label className="checkbox-field settings-checkbox"><input type="checkbox" name="beginnerMode" defaultChecked={settings.data.beginner_mode}/><span>Use beginner-friendly interface mode</span></label>{message && <div className="form-message">{message}</div>}<div className="settings-actions"><Button type="submit" loading={busy}><Settings size={18}/> Save settings</Button></div></form>}</section>
 }
 
 export function NotificationsView({ context }: { context: BusinessContext }) {
