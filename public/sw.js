@@ -1,4 +1,4 @@
-const VERSION = "v3"
+const VERSION = "v4"
 const CACHE_PREFIX = "smartpos"
 const SHELL_CACHE = `${CACHE_PREFIX}-shell-${VERSION}`
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${VERSION}`
