@@ -6,6 +6,7 @@ import {
   Bell,
   CheckCircle2,
   CreditCard,
+  Download,
   Minus,
   Package,
   Pencil,
@@ -826,15 +827,86 @@ export function PosView({ context }: { context: BusinessContext }) {
 }
 
 export function SalesView({ context }: { context: BusinessContext }) {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
+  const [startDate, setStartDate] = useState(today)
+  const [endDate, setEndDate] = useState(today)
+  const [startTime, setStartTime] = useState("00:00")
+  const [endTime, setEndTime] = useState("23:59")
+  const products = useProducts(context)
+  const safeStartDate = startDate || today
+  const safeEndDate = endDate || today
+  const safeStartTime = startTime || "00:00"
+  const safeEndTime = endTime || "23:59"
+  const from = new Date(`${safeStartDate}T${safeStartTime}:00+08:00`).toISOString()
+  const to = new Date(`${safeEndDate}T${safeEndTime}:59+08:00`).toISOString()
   const sales = useQuery({
-    queryKey: ["sales", context.branchId],
+    queryKey: ["sales-report", context.branchId, from, to],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sales").select("id,receipt_number,total_centavos,item_count,status,completed_at").eq("branch_id", context.branchId).order("completed_at", { ascending: false }).limit(100)
+      const { data, error } = await supabase
+        .from("sales")
+        .select("id,receipt_number,total_centavos,item_count,status,completed_at,sale_items(product_name,sku,quantity,unit_price_centavos,line_total_centavos)")
+        .eq("branch_id", context.branchId)
+        .gte("completed_at", from)
+        .lte("completed_at", to)
+        .order("completed_at", { ascending: false })
+        .limit(1000)
       if (error) throw error
       return data ?? []
     },
   })
-  return <section><div className="dashboard-title"><div><span className="eyebrow">Transaction records</span><h1>Sales</h1><p>Latest confirmed transactions for this branch.</p></div></div>{sales.error && <div className="form-message">Unable to load sales. Confirm migration 0003 was applied.</div>}{sales.data?.length ? <div className="data-table panel"><div className="table-row sales-row table-head"><span>Receipt</span><span>Date</span><span>Items</span><span>Status</span><span>Total</span></div>{sales.data.map((sale)=><div className="table-row sales-row" key={sale.id}><span><b>{sale.receipt_number}</b></span><span>{new Intl.DateTimeFormat("en-PH",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Manila"}).format(new Date(sale.completed_at))}</span><span>{Number(sale.item_count)}</span><span className="status-chip">{sale.status}</span><span><b>{peso(sale.total_centavos)}</b></span></div>)}</div> : !sales.isLoading && <Empty icon={ReceiptText} title="No sales yet" copy="Completed checkout transactions will appear here." />}</section>
+  const completedSales = (sales.data ?? []).filter((sale) => sale.status === "completed")
+  const totalSales = completedSales.reduce((sum, sale) => sum + Number(sale.total_centavos), 0)
+  const totalItems = completedSales.reduce((sum, sale) => sum + Number(sale.item_count), 0)
+  const remainingStock = (products.data ?? []).reduce((sum, product) => sum + Number(product.inventory_balances[0]?.confirmed_quantity ?? 0), 0)
+  const lowStock = (products.data ?? []).filter((product) => Number(product.inventory_balances[0]?.confirmed_quantity ?? 0) <= Number(product.minimum_stock)).length
+
+  function downloadSalesCsv() {
+    const escapeCsv = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`
+    const rows = (sales.data ?? []).flatMap((sale) => {
+      const items = sale.sale_items?.length ? sale.sale_items : [{ product_name: "", sku: "", quantity: sale.item_count, unit_price_centavos: null, line_total_centavos: sale.total_centavos }]
+      return items.map((item) => [
+        sale.receipt_number,
+        new Intl.DateTimeFormat("en-PH", { dateStyle: "short", timeStyle: "medium", timeZone: "Asia/Manila" }).format(new Date(sale.completed_at)),
+        item.product_name,
+        item.sku,
+        item.quantity,
+        item.unit_price_centavos == null ? "" : (Number(item.unit_price_centavos) / 100).toFixed(2),
+        (Number(item.line_total_centavos) / 100).toFixed(2),
+        sale.status,
+      ])
+    })
+    const csv = [
+      ["Receipt", "Date and time (PST)", "Product", "SKU", "Quantity", "Unit price (PHP)", "Line total (PHP)", "Status"],
+      ...rows,
+    ].map((row) => row.map(escapeCsv).join(",")).join("\n")
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `smartpos-sales-${startDate}-${endDate}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return <section className="sales-report-page">
+    <div className="dashboard-title"><div><span className="eyebrow">Transaction records</span><h1>Sales & Reports</h1><p>Sales performance and inventory position for the selected period.</p></div><Button onClick={downloadSalesCsv} disabled={!sales.data?.length}><Download size={17} /> Download CSV</Button></div>
+    <div className="report-filters panel">
+      <Field label="Start date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+      <Field label="Start time" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+      <Field label="End date" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+      <Field label="End time" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+    </div>
+    <div className="report-summary-grid">
+      <article className="report-summary-card"><span>{startDate === today && endDate === today ? "Total sales today" : "Total sales"}</span><strong>{peso(totalSales)}</strong><small>{completedSales.length} completed transactions</small></article>
+      <article className="report-summary-card"><span>Total items sold</span><strong>{totalItems}</strong><small>Within selected date and time</small></article>
+      <article className="report-summary-card"><span>Remaining stocks</span><strong>{remainingStock}</strong><small>Across {products.data?.length ?? 0} active products</small></article>
+      <article className="report-summary-card warning"><span>Low stock products</span><strong>{lowStock}</strong><small>At or below minimum threshold</small></article>
+    </div>
+    {(sales.error || products.error) && <div className="form-message">Unable to load the complete report. Check the database connection and try again.</div>}
+    <div className="report-section-heading"><div><h2>Sales logs</h2><p>{startDate} {startTime} to {endDate} {endTime} · Philippine time</p></div><span>{sales.data?.length ?? 0} records</span></div>
+    {sales.data?.length ? <div className="data-table panel"><div className="table-row sales-row table-head"><span>Receipt</span><span>Date</span><span>Items</span><span>Status</span><span>Total</span></div>{sales.data.map((sale)=><div className="table-row sales-row" key={sale.id}><span><b>{sale.receipt_number}</b></span><span>{new Intl.DateTimeFormat("en-PH",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Manila"}).format(new Date(sale.completed_at))}</span><span>{Number(sale.item_count)}</span><span className="status-chip">{sale.status}</span><span><b>{peso(sale.total_centavos)}</b></span></div>)}</div> : !sales.isLoading && <Empty icon={ReceiptText} title="No sales in this range" copy="Choose another date or time range to view transaction logs." />}
+    <div className="report-section-heading"><div><h2>Remaining inventory</h2><p>Current confirmed quantities for this branch.</p></div></div>
+    {products.data?.length ? <div className="inventory-report-grid">{products.data.map((product) => { const stock = Number(product.inventory_balances[0]?.confirmed_quantity ?? 0); return <article key={product.id}><div>{product.image_path ? <img src={product.image_path} alt="" /> : <span><Package size={18} /></span>}<div><b>{product.name}</b><small>{product.sku || "No SKU"}</small></div></div><strong>{stock} {product.unit}</strong><em className={stock <= Number(product.minimum_stock) ? "low" : "healthy"}>{stock <= Number(product.minimum_stock) ? "Low stock" : "In stock"}</em></article> })}</div> : !products.isLoading && <Empty icon={Package} title="No inventory records" copy="Products and remaining stock will appear here." />}
+  </section>
 }
 
 type Customer = {

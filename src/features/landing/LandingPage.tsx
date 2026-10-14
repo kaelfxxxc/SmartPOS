@@ -8,6 +8,7 @@ import {
   CircleCheck,
   CloudOff,
   CreditCard,
+  Download,
   Headphones,
   Menu,
   PackageCheck,
@@ -43,6 +44,11 @@ const faqs = [
     "No. Internal records are clearly identified. Configured invoice issuance requires the business’s actual registration, approved setup, and BIR or professional verification.",
   ],
 ]
+
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
+}
 
 function Narration() {
   const [open, setOpen] = useState(false)
@@ -230,6 +236,42 @@ function DashboardPreview() {
 export default function LandingPage() {
   const [menu, setMenu] = useState(false)
   const [openFaq, setOpenFaq] = useState(0)
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
+  const [installHelp, setInstallHelp] = useState(false)
+  const [installed, setInstalled] = useState(() =>
+    window.matchMedia("(display-mode: standalone)").matches ||
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
+  )
+
+  useEffect(() => {
+    const capturePrompt = (event: Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as InstallPromptEvent)
+    }
+    const markInstalled = () => {
+      setInstalled(true)
+      setInstallPrompt(null)
+      setInstallHelp(false)
+    }
+    window.addEventListener("beforeinstallprompt", capturePrompt)
+    window.addEventListener("appinstalled", markInstalled)
+    return () => {
+      window.removeEventListener("beforeinstallprompt", capturePrompt)
+      window.removeEventListener("appinstalled", markInstalled)
+    }
+  }, [])
+
+  async function installApp() {
+    if (!installPrompt) {
+      setInstallHelp(true)
+      return
+    }
+    await installPrompt.prompt()
+    const choice = await installPrompt.userChoice
+    if (choice.outcome === "accepted") setInstalled(true)
+    setInstallPrompt(null)
+  }
+
   return (
     <main className="landing">
       <header className="landing-nav">
@@ -246,6 +288,7 @@ export default function LandingPage() {
             Start free
           </AppLink>
         </div>
+        {!installed && <Button variant="secondary" className="landing-pwa-install" onClick={installApp}><Download size={17} /><span>Install</span></Button>}
         <Button
           variant="ghost"
           className="mobile-menu"
@@ -255,6 +298,7 @@ export default function LandingPage() {
           <Menu />
         </Button>
       </header>
+      {installHelp && <div className="landing-install-help" role="status"><span>Open your browser menu and choose <b>Install app</b> or <b>Add to Home Screen</b>. On iPhone and iPad, use the Share menu.</span><Button variant="ghost" aria-label="Close installation instructions" onClick={() => setInstallHelp(false)}><X size={16} /></Button></div>}
       <section className="hero">
         <div className="hero-copy">
           <span className="eyebrow">
