@@ -575,9 +575,22 @@ export function InventoryView({ context }: { context: BusinessContext }) {
                 imageUrl: details?.imageUrl ?? null,
               })
               setMessage(details ? "Product information found. Confirm the details below." : "Barcode scanned successfully. Enter the product details below.")
+              return {
+                name: details?.name ?? "New scanned product",
+                barcode: value,
+                imageUrl: details?.imageUrl,
+                detail: "Not yet in inventory · complete the product form to add it",
+                status: "new" as const,
+              }
             } catch {
               if (sequence !== inventoryScanSequence.current) return
               setMessage("Barcode scanned successfully. Product lookup is unavailable, so enter the details below.")
+              return {
+                name: "New scanned product",
+                barcode: value,
+                detail: "Not yet in inventory · enter the product details below",
+                status: "new" as const,
+              }
             } finally {
               if (sequence === inventoryScanSequence.current) setLookupBusy(false)
             }
@@ -589,12 +602,30 @@ export function InventoryView({ context }: { context: BusinessContext }) {
           setSelectedImage(product.image_path)
           setMessage(`${product.name} found. Enter stock quantity to confirm.`)
           const sequence = ++inventoryScanSequence.current
-          if (product.image_path) return
+          const stock = Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)
+          if (product.image_path) return {
+            name: product.name,
+            barcode: value,
+            imageUrl: product.image_path,
+            detail: `${stock} ${product.unit} currently in stock`,
+            value: peso(product.price_centavos),
+            status: "existing" as const,
+          }
+          let imageUrl: string | null = null
           try {
             const details = await lookupOpenFoodFactsProduct(value)
-            if (sequence === inventoryScanSequence.current) setSelectedImage(details?.imageUrl ?? null)
+            imageUrl = details?.imageUrl ?? null
+            if (sequence === inventoryScanSequence.current) setSelectedImage(imageUrl)
           } catch {
             if (sequence === inventoryScanSequence.current) setSelectedImage(null)
+          }
+          return {
+            name: product.name,
+            barcode: value,
+            imageUrl,
+            detail: `${stock} ${product.unit} currently in stock`,
+            value: peso(product.price_centavos),
+            status: "existing" as const,
           }
         }}
       />
@@ -736,12 +767,30 @@ export function PosView({ context }: { context: BusinessContext }) {
               setScannedImage(product.image_path)
               setQuantity(product, (cart[product.id]?.quantity ?? 0) + 1)
               const sequence = ++scanSequence.current
-              if (product.image_path) return
+              const stock = Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)
+              if (product.image_path) return {
+                name: product.name,
+                barcode: value,
+                imageUrl: product.image_path,
+                detail: `${stock} ${product.unit} available · added to basket`,
+                value: peso(product.price_centavos),
+                status: "existing" as const,
+              }
+              let imageUrl: string | null = null
               try {
                 const details = await lookupOpenFoodFactsProduct(value)
-                if (sequence === scanSequence.current) setScannedImage(details?.imageUrl ?? null)
+                imageUrl = details?.imageUrl ?? null
+                if (sequence === scanSequence.current) setScannedImage(imageUrl)
               } catch {
                 if (sequence === scanSequence.current) setScannedImage(null)
+              }
+              return {
+                name: product.name,
+                barcode: value,
+                imageUrl,
+                detail: `${stock} ${product.unit} available · added to basket`,
+                value: peso(product.price_centavos),
+                status: "existing" as const,
               }
             }}
           />

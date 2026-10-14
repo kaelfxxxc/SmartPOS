@@ -2,6 +2,15 @@ import { useEffect, useRef, useState } from "react"
 import { Camera, ScanLine, Smartphone, X } from "lucide-react"
 import { Button } from "@/components/ui"
 
+export type BarcodeScanResult = {
+  name: string
+  barcode: string
+  imageUrl?: string | null
+  detail?: string
+  value?: string
+  status?: "existing" | "new"
+}
+
 type ScannerControls = { stop: () => void }
 type BarcodeDetectorConstructor = new (options?: {
   formats?: string[]
@@ -13,24 +22,38 @@ export default function BarcodeScanner({
   onDetected,
   compact = false,
 }: {
-  onDetected: (barcode: string) => void
+  onDetected: (barcode: string) => BarcodeScanResult | void | Promise<BarcodeScanResult | void>
   compact?: boolean
 }) {
   const [cameraOpen, setCameraOpen] = useState(false)
   const [message, setMessage] = useState("Scanner ready")
+  const [scanResult, setScanResult] = useState<BarcodeScanResult | null>(null)
   const [mobileDevice, setMobileDevice] = useState(() =>
     window.matchMedia("(max-width: 1024px) and (pointer: coarse)").matches,
   )
   const videoRef = useRef<HTMLVideoElement>(null)
   const lastScan = useRef({ value: "", at: 0 })
+  const completedScan = useRef("")
+  const processing = useRef(false)
 
-  function emit(value: string) {
+  async function emit(value: string) {
     const barcode = value.trim()
     const now = Date.now()
-    if (!barcode || (lastScan.current.value === barcode && now - lastScan.current.at < 1200)) return
+    if (!barcode || processing.current || completedScan.current === barcode || (lastScan.current.value === barcode && now - lastScan.current.at < 1200)) return
     lastScan.current = { value: barcode, at: now }
-    setMessage(`Scanned ${barcode}`)
-    onDetected(barcode)
+    processing.current = true
+    setScanResult(null)
+    setMessage("Barcode detected. Loading product information…")
+    try {
+      const result = await onDetected(barcode)
+      if (result) {
+        completedScan.current = barcode
+        setScanResult(result)
+      }
+      setMessage(result ? "Scan successful" : `Scanned ${barcode}`)
+    } finally {
+      processing.current = false
+    }
   }
 
   useEffect(() => {
@@ -123,7 +146,7 @@ export default function BarcodeScanner({
         <span><ScanLine /></span>
         <div><b>Barcode scanner</b><small>{message}</small></div>
       </div>
-      <Button variant="secondary" onClick={() => setCameraOpen(true)}>
+      <Button variant="secondary" onClick={() => { completedScan.current = ""; setScanResult(null); setMessage("Scanner ready"); setCameraOpen(true) }}>
         <Camera size={17} /> Scan with camera
       </Button>
       {cameraOpen && (
@@ -132,6 +155,10 @@ export default function BarcodeScanner({
             <div className="camera-heading"><div><ScanLine /><b>Scan barcode</b></div><Button variant="ghost" aria-label="Close camera" onClick={() => setCameraOpen(false)}><X /></Button></div>
             <div className="camera-viewport"><video ref={videoRef} muted playsInline /><span /></div>
             <p>{message}</p>
+            {scanResult && <article className="scanner-product-result">
+              {scanResult.imageUrl ? <img src={scanResult.imageUrl} alt={`${scanResult.name} package`} /> : <span className="scanner-product-placeholder"><ScanLine /></span>}
+              <div><span className={`scanner-result-status ${scanResult.status ?? "existing"}`}>{scanResult.status === "new" ? "New product" : "In inventory"}</span><b>{scanResult.name}</b><small>Barcode: {scanResult.barcode}</small>{scanResult.detail && <small>{scanResult.detail}</small>}{scanResult.value && <strong>{scanResult.value}</strong>}<Button variant="secondary" onClick={() => { completedScan.current = ""; lastScan.current = { value: "", at: 0 }; setScanResult(null); setMessage("Point the camera at a barcode") }}><ScanLine size={15} /> Scan another product</Button></div>
+            </article>}
           </div>
         </div>
       )}
