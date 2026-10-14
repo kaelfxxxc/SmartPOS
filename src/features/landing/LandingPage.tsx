@@ -289,8 +289,8 @@ export default function LandingPage() {
             <a className="btn btn-ghost" href="#features">
               Explore features
             </a>
+            <Narration />
           </div>
-          <Narration />
           <div className="hero-trust">
             <span>
               <Check /> No card required
