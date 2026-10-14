@@ -6,6 +6,7 @@ import type {
 } from "react"
 import { Link, type LinkProps } from "react-router"
 import { LoaderCircle } from "lucide-react"
+import smartPosLogo from "@/images/icons/smart-pos-logo.png"
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "dark"
@@ -106,10 +107,7 @@ export function Logo({ light = false }: { light?: boolean }) {
       className={`logo ${light ? "logo-light" : ""}`}
       aria-label="SmartPOS — Your AI-native POS"
     >
-      <img
-        src={`${import.meta.env.BASE_URL}brand/smartpos-logo.png`}
-        alt="SmartPOS — Your AI-native POS"
-      />
+      <img src={smartPosLogo} alt="SmartPOS — Your AI-native POS" />
     </AppLink>
   )
 }
