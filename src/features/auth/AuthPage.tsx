@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -12,6 +12,7 @@ import {
   Field,
   Logo,
 } from "@/components/ui"
+import { useAuth } from "./AuthProvider"
 
 const schema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -29,6 +30,7 @@ export default function AuthPage() {
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
+  const { user } = useAuth()
   const {
     register,
     handleSubmit,
@@ -82,15 +84,36 @@ export default function AuthPage() {
         "Check your email to verify your account, then sign in.",
       )
     }
-    navigate("/onboarding")
+    if (mode === "signup") {
+      navigate("/onboarding", { replace: true })
+      return
+    }
+    await routeAuthenticatedUser()
   }
+
+  async function routeAuthenticatedUser() {
+    setBusy(true)
+    const { data, error } = await supabase
+      .from("business_members")
+      .select("id")
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle()
+    setBusy(false)
+    if (error) return setMessage(error.message)
+    navigate(data ? "/app" : "/onboarding", { replace: true })
+  }
+
+  useEffect(() => {
+    if (user) void routeAuthenticatedUser()
+  }, [user?.id])
 
   async function socialLogin(provider: "google" | "facebook") {
     setBusy(true)
     setMessage("")
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/onboarding` },
+      options: { redirectTo: `${window.location.origin}/login` },
     })
     if (error) {
       setMessage(error.message)

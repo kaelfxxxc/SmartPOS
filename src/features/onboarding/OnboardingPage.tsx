@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -20,8 +20,26 @@ type Values = z.infer<typeof schema>
 
 export default function OnboardingPage() {
   const [message, setMessage] = useState("")
+  const [checkingMembership, setCheckingMembership] = useState(true)
   const navigate = useNavigate()
   const { user } = useAuth()
+  useEffect(() => {
+    let active = true
+    supabase
+      .from("business_members")
+      .select("id")
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return
+        if (!error && data) navigate("/app", { replace: true })
+        setCheckingMembership(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [navigate])
   const {
     register,
     handleSubmit,
@@ -56,6 +74,10 @@ export default function OnboardingPage() {
       return
     }
     navigate("/app")
+  }
+
+  if (checkingMembership) {
+    return <main className="center-screen">Checking your workspace…</main>
   }
 
   return (

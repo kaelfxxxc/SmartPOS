@@ -1,9 +1,8 @@
-import { useMemo, useRef, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ArrowRight,
   Archive,
-  BarChart3,
   Bell,
   CheckCircle2,
   CreditCard,
@@ -92,7 +91,7 @@ export function DashboardView({
       today.setHours(0, 0, 0, 0)
       const { data, error } = await supabase
         .from("sales")
-        .select("total_centavos,item_count")
+        .select("id,total_centavos,item_count,completed_at")
         .eq("branch_id", context.branchId)
         .eq("status", "completed")
         .gte("completed_at", today.toISOString())
@@ -100,6 +99,27 @@ export function DashboardView({
       return data ?? []
     },
   })
+  useEffect(() => {
+    const channel = supabase
+      .channel(`dashboard-sales-${context.branchId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "sales",
+          filter: `branch_id=eq.${context.branchId}`,
+        },
+        () => {
+          void sales.refetch()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [context.branchId, sales.refetch])
   const totals = useMemo(
     () =>
       (sales.data ?? []).reduce(
@@ -115,6 +135,33 @@ export function DashboardView({
     (product) =>
       Number(product.inventory_balances[0]?.confirmed_quantity ?? 0) <= 5,
   ).length
+  const hourlySales = useMemo(() => {
+    const buckets = Array.from({ length: 12 }, (_, index) => ({
+      label: `${String(index * 2).padStart(2, "0")}:00`,
+      total: 0,
+      transactions: 0,
+    }))
+    const hourFormatter = new Intl.DateTimeFormat("en-PH", {
+      hour: "2-digit",
+      hourCycle: "h23",
+      timeZone: "Asia/Manila",
+    })
+    for (const sale of sales.data ?? []) {
+      const hour = Number(hourFormatter.format(new Date(sale.completed_at)))
+      const bucket = buckets[Math.min(11, Math.floor(hour / 2))]
+      bucket.total += Number(sale.total_centavos)
+      bucket.transactions += 1
+    }
+    return buckets
+  }, [sales.data])
+  const chartMaximum = Math.max(...hourlySales.map((bucket) => bucket.total), 1)
+  const chartPoints = hourlySales
+    .map((bucket, index) => {
+      const x = (index / (hourlySales.length - 1)) * 100
+      const y = 88 - (bucket.total / chartMaximum) * 72
+      return `${x},${y}`
+    })
+    .join(" ")
 
   return (
     <>
@@ -163,20 +210,38 @@ export function DashboardView({
         ))}
       </div>
       <div className="dashboard-grid">
-        <article className="panel chart-empty">
+        <article className="panel sales-chart-panel">
           <div className="panel-title">
             <div>
               <h2>Sales overview</h2>
-              <p>Today in Philippine local time</p>
+              <p>Live completed sales · Philippine time</p>
+            </div>
+            <span className="live-data-pill"><i /> Live</span>
+          </div>
+          <div className="sales-chart-summary">
+            <div><small>Today’s sales</small><strong>{peso(totals.total)}</strong></div>
+            <div><small>Transactions</small><strong>{sales.data?.length ?? 0}</strong></div>
+          </div>
+          <div className="sales-chart" role="img" aria-label={`Hourly sales chart showing ${peso(totals.total)} across ${sales.data?.length ?? 0} completed transactions today`}>
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="sales-chart-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#16a085" stopOpacity="0.34" />
+                  <stop offset="100%" stopColor="#16a085" stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
+              {[16, 40, 64, 88].map((y) => <line key={y} x1="0" y1={y} x2="100" y2={y} className="chart-grid-line" />)}
+              <polygon points={`0,88 ${chartPoints} 100,88`} className="chart-area" />
+              <polyline points={chartPoints} className="chart-line" />
+              {hourlySales.map((bucket, index) => (
+                <circle key={bucket.label} cx={(index / (hourlySales.length - 1)) * 100} cy={88 - (bucket.total / chartMaximum) * 72} r="1.25" className="chart-point" />
+              ))}
+            </svg>
+            <div className="sales-chart-labels">
+              {hourlySales.filter((_, index) => index % 2 === 0).map((bucket) => <span key={bucket.label}>{bucket.label}</span>)}
             </div>
           </div>
-          <BarChart3 size={42} />
-          <b>{sales.data?.length ? "Sales recorded today" : "No sales yet"}</b>
-          <p>
-            {sales.data?.length
-              ? `${sales.data.length} completed transaction${sales.data.length === 1 ? "" : "s"} totaling ${peso(totals.total)}.`
-              : "Complete a checkout to begin your sales history."}
-          </p>
+          {!sales.isLoading && !sales.data?.length && <p className="sales-chart-empty">Complete a checkout to start the live sales chart.</p>}
         </article>
         <article className="panel quick-start">
           <div className="panel-title">
@@ -356,7 +421,10 @@ export function ProductsView({ context }: { context: BusinessContext }) {
       />
       {open && (
         <form className="inline-form panel" onSubmit={addProduct}>
-          {productImage && <div className="barcode-product-preview"><img src={productImage} alt={`${productName || "Scanned product"} package`} /><div><b>{productName || "Product found"}</b><small>Product image from Open Food Facts</small></div></div>}
+          {barcode && <div className="barcode-product-preview">
+            {productImage ? <img src={productImage} alt={`${productName || "Scanned product"} package`} /> : <span className="barcode-product-placeholder"><Package /></span>}
+            <div><b>{productName || "Scanned product"}</b><small>Barcode: {barcode}</small><span className="image-source-copy">{productImage ? "Product image from Open Food Facts" : "No product image available"}</span></div>
+          </div>}
           <Field label="Product name" name="name" required value={productName} onChange={(event) => setProductName(event.target.value)} placeholder="Product name" />
           <Field label="SKU" name="sku" placeholder="Optional SKU" />
           <Field label="Barcode" name="barcode" value={barcode} onChange={(event) => setBarcode(event.target.value)} onBlur={() => void prepareNewBarcode(barcode)} placeholder="Scan or enter barcode" />
@@ -400,6 +468,8 @@ export function InventoryView({ context }: { context: BusinessContext }) {
   const queryClient = useQueryClient()
   const products = useProducts(context)
   const [selected, setSelected] = useState<Product | null>(null)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const inventoryScanSequence = useRef(0)
   const [quantity, setQuantity] = useState("")
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
@@ -420,6 +490,7 @@ export function InventoryView({ context }: { context: BusinessContext }) {
     if (error) return setMessage(error.message)
     setMessage(`${selected.name} stock updated successfully.`)
     setSelected(null)
+    setSelectedImage(null)
     setQuantity("")
     await queryClient.invalidateQueries({ queryKey: ["products"] })
   }
@@ -429,18 +500,35 @@ export function InventoryView({ context }: { context: BusinessContext }) {
       <div className="dashboard-title"><div><span className="eyebrow">Stock control</span><h1>Inventory</h1><p>Receive stock only after confirmation.</p></div></div>
       <BarcodeScanner
         compact
-        onDetected={(value) => {
+        onDetected={async (value) => {
           const product = products.data?.find((item) =>
             item.product_barcodes.some((barcode) => barcode.barcode === value),
           )
-          if (!product) return setMessage(`No product found for barcode ${value}.`)
+          if (!product) {
+            inventoryScanSequence.current += 1
+            setSelected(null)
+            setSelectedImage(null)
+            return setMessage(`No product found for barcode ${value}.`)
+          }
           setSelected(product)
+          setSelectedImage(null)
           setMessage(`${product.name} found. Enter stock quantity to confirm.`)
+          const sequence = ++inventoryScanSequence.current
+          try {
+            const details = await lookupOpenFoodFactsProduct(value)
+            if (sequence === inventoryScanSequence.current) setSelectedImage(details?.imageUrl ?? null)
+          } catch {
+            if (sequence === inventoryScanSequence.current) setSelectedImage(null)
+          }
         }}
       />
       {message && <div className="form-message workspace-message">{message}</div>}
-      {selected && <div className="receive-panel panel"><div><b>Receive {selected.name}</b><small>Current stock: {Number(selected.inventory_balances[0]?.confirmed_quantity ?? 0)}</small></div><Field label="Quantity to add" value={quantity} onChange={(e) => setQuantity(e.target.value)} type="number" min="0.001" step="0.001" /><Button variant="ghost" onClick={() => setSelected(null)}>Cancel</Button><Button loading={busy} onClick={receive}>Confirm stock</Button></div>}
-      {products.data?.length ? <div className="inventory-grid">{products.data.map((product) => <article className="inventory-card" key={product.id}><span className="inventory-icon"><Package /></span><div><b>{product.name}</b><small>{product.sku || "No SKU"}</small></div><strong>{Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)}</strong><Button variant="secondary" onClick={() => { setSelected(product); setMessage(""); }}>Add stock</Button></article>)}</div> : !products.isLoading && <Empty icon={Package} title="No inventory yet" copy="Create a product before receiving stock." />}
+      {selected && <div className="barcode-product-preview inventory-scan-result">
+        {selectedImage ? <img src={selectedImage} alt={`${selected.name} package`} /> : <span className="barcode-product-placeholder"><Package /></span>}
+        <div><b>{selected.name}</b><small>Barcode: {selected.product_barcodes[0]?.barcode || "Not assigned"}</small><strong>{Number(selected.inventory_balances[0]?.confirmed_quantity ?? 0)} currently in stock</strong></div>
+      </div>}
+      {selected && <div className="receive-panel panel"><div><b>Receive {selected.name}</b><small>Current stock: {Number(selected.inventory_balances[0]?.confirmed_quantity ?? 0)}</small></div><Field label="Quantity to add" value={quantity} onChange={(e) => setQuantity(e.target.value)} type="number" min="0.001" step="0.001" /><Button variant="ghost" onClick={() => { inventoryScanSequence.current += 1; setSelected(null); setSelectedImage(null); }}>Cancel</Button><Button loading={busy} onClick={receive}>Confirm stock</Button></div>}
+      {products.data?.length ? <div className="inventory-grid">{products.data.map((product) => <article className="inventory-card" key={product.id}><span className="inventory-icon"><Package /></span><div><b>{product.name}</b><small>{product.sku || "No SKU"}</small></div><strong>{Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)}</strong><Button variant="secondary" onClick={() => { inventoryScanSequence.current += 1; setSelectedImage(null); setSelected(product); setMessage(""); }}>Add stock</Button></article>)}</div> : !products.isLoading && <Empty icon={Package} title="No inventory yet" copy="Create a product before receiving stock." />}
     </section>
   )
 }
@@ -533,7 +621,12 @@ export function PosView({ context }: { context: BusinessContext }) {
               const product = products.data?.find((item) =>
                 item.product_barcodes.some((barcode) => barcode.barcode === value),
               )
-              if (!product) return setMessage(`Product not found for barcode ${value}.`)
+              if (!product) {
+                scanSequence.current += 1
+                setScannedProduct(null)
+                setScannedImage(null)
+                return setMessage(`Product not found for barcode ${value}.`)
+              }
               setScannedProduct(product)
               setScannedImage(null)
               setQuantity(product, (cart[product.id]?.quantity ?? 0) + 1)
