@@ -1,20 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import PwaUpdatePrompt from './components/PwaUpdatePrompt'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
+    <PwaUpdatePrompt />
   </React.StrictMode>,
 )
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, {
-      scope: import.meta.env.BASE_URL,
-    }).catch((error) => {
-      console.error('SmartPOS service worker registration failed:', error)
-    })
-  })
-}
