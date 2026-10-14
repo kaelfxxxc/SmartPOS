@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   Bell,
@@ -23,6 +23,7 @@ import { useNavigate } from "react-router"
 import { Button, Logo } from "@/components/ui"
 import storeIcon from "@/images/icons/store-svgrepo-com.svg"
 import { supabase } from "@/lib/supabase/client"
+import { usePwaInstall } from "@/lib/pwaInstall"
 import {
   DashboardView,
   DigitalLedgerView,
@@ -35,11 +36,6 @@ import {
   SettingsView,
 } from "./WorkspaceViews"
 import type { BusinessContext, WorkspaceView } from "./types"
-
-type InstallPromptEvent = Event & {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
-}
 
 const coreNav = [
   [LayoutDashboard, "Dashboard", "dashboard"],
@@ -60,40 +56,14 @@ export default function WorkspacePage() {
   const [view, setView] = useState<WorkspaceView>("dashboard")
   const [mobileOpen, setMobileOpen] = useState(false)
   const [subscriptionOpen, setSubscriptionOpen] = useState(false)
-  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
   const [installHelp, setInstallHelp] = useState(false)
-  const [installed, setInstalled] = useState(() =>
-    window.matchMedia("(display-mode: standalone)").matches ||
-    Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
-  )
-
-  useEffect(() => {
-    const capturePrompt = (event: Event) => {
-      event.preventDefault()
-      setInstallPrompt(event as InstallPromptEvent)
-    }
-    const markInstalled = () => {
-      setInstalled(true)
-      setInstallPrompt(null)
-      setInstallHelp(false)
-    }
-    window.addEventListener("beforeinstallprompt", capturePrompt)
-    window.addEventListener("appinstalled", markInstalled)
-    return () => {
-      window.removeEventListener("beforeinstallprompt", capturePrompt)
-      window.removeEventListener("appinstalled", markInstalled)
-    }
-  }, [])
+  const { installed, requestInstall } = usePwaInstall()
 
   async function installApp() {
-    if (!installPrompt) {
+    const accepted = await requestInstall()
+    if (!accepted) {
       setInstallHelp(true)
-      return
     }
-    await installPrompt.prompt()
-    const choice = await installPrompt.userChoice
-    if (choice.outcome === "accepted") setInstalled(true)
-    setInstallPrompt(null)
   }
 
   const membership = useQuery({

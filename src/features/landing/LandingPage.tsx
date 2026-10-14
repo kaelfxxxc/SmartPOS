@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react"
 import { AppLink, Button, Logo } from "@/components/ui"
+import { usePwaInstall } from "@/lib/pwaInstall"
 
 const ENGLISH =
   "SmartPOS is your AI-native point of sale and inventory system, made for Filipino businesses. Manage sales, stock, GCash, Maya, and customer credit in one secure place. Keep selling even when the internet is unreliable, then synchronize your authorized records when you reconnect."
@@ -44,11 +45,6 @@ const faqs = [
     "No. Internal records are clearly identified. Configured invoice issuance requires the business’s actual registration, approved setup, and BIR or professional verification.",
   ],
 ]
-
-type InstallPromptEvent = Event & {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
-}
 
 function Narration() {
   const [open, setOpen] = useState(false)
@@ -236,40 +232,14 @@ function DashboardPreview() {
 export default function LandingPage() {
   const [menu, setMenu] = useState(false)
   const [openFaq, setOpenFaq] = useState(0)
-  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
   const [installHelp, setInstallHelp] = useState(false)
-  const [installed, setInstalled] = useState(() =>
-    window.matchMedia("(display-mode: standalone)").matches ||
-    Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
-  )
-
-  useEffect(() => {
-    const capturePrompt = (event: Event) => {
-      event.preventDefault()
-      setInstallPrompt(event as InstallPromptEvent)
-    }
-    const markInstalled = () => {
-      setInstalled(true)
-      setInstallPrompt(null)
-      setInstallHelp(false)
-    }
-    window.addEventListener("beforeinstallprompt", capturePrompt)
-    window.addEventListener("appinstalled", markInstalled)
-    return () => {
-      window.removeEventListener("beforeinstallprompt", capturePrompt)
-      window.removeEventListener("appinstalled", markInstalled)
-    }
-  }, [])
+  const { installed, requestInstall } = usePwaInstall()
 
   async function installApp() {
-    if (!installPrompt) {
+    const accepted = await requestInstall()
+    if (!accepted) {
       setInstallHelp(true)
-      return
     }
-    await installPrompt.prompt()
-    const choice = await installPrompt.userChoice
-    if (choice.outcome === "accepted") setInstalled(true)
-    setInstallPrompt(null)
   }
 
   return (
