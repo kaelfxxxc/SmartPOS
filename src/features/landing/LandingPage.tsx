@@ -258,7 +258,7 @@ export default function LandingPage() {
             Start free
           </AppLink>
         </div>
-        {!installed && <Button variant="secondary" className="landing-pwa-install" onClick={installApp}><Download size={17} /><span>Install</span></Button>}
+        {!installed && <Button type="button" variant="secondary" className="landing-pwa-install" onClick={installApp} aria-label="Install SmartPOS as an app"><Download size={17} /><span>Install</span></Button>}
         <Button
           variant="ghost"
           className="mobile-menu"

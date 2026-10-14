@@ -41,12 +41,19 @@ export function usePwaInstall() {
 
   async function requestInstall() {
     if (!deferredPrompt) return false
-    await deferredPrompt.prompt()
-    const choice = await deferredPrompt.userChoice
+    const promptEvent = deferredPrompt
     deferredPrompt = null
-    if (choice.outcome === "accepted") installed = true
-    notify()
-    return choice.outcome === "accepted"
+    try {
+      await promptEvent.prompt()
+      const choice = await promptEvent.userChoice
+      if (choice.outcome === "accepted") installed = true
+      notify()
+      return choice.outcome === "accepted"
+    } catch (error) {
+      console.error("SmartPOS installation prompt failed:", error)
+      notify()
+      return false
+    }
   }
 
   return {

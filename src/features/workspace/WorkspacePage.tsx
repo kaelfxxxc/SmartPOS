@@ -223,7 +223,7 @@ export default function WorkspacePage() {
           return <button type="button" className="sidebar-trial" title={`${planLabel} · ${detail}`} aria-label={`View subscription plan: ${planLabel}`} onClick={() => { setSubscriptionBillingPreview(subscription.data.billing_cycle === "annual" ? "annual" : "monthly"); setSubscriptionOpen(true); setMobileOpen(false) }}><CalendarDays size={19} /><div><b>{planLabel}</b><small>{detail}</small><span className="sidebar-trial-action">View plan</span></div></button>
         })()}
         {!installed && (
-          <Button variant="secondary" className="pwa-install-button sidebar-install-button" onClick={installApp}>
+          <Button type="button" variant="secondary" className="pwa-install-button sidebar-install-button" onClick={installApp} aria-label="Install SmartPOS as an app">
             <Download size={17} /> <span>Install SmartPOS</span>
           </Button>
         )}
