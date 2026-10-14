@@ -22,7 +22,7 @@ import {
 import { useNavigate } from "react-router"
 import { Button, Logo } from "@/components/ui"
 import storeIcon from "@/images/icons/store-svgrepo-com.svg"
-import { supabase } from "@/lib/supabase/client"
+import { supabase, supabaseAnonKey, supabaseUrl } from "@/lib/supabase/client"
 import { usePwaInstall } from "@/lib/pwaInstall"
 import {
   DashboardView,
@@ -102,6 +102,10 @@ export default function WorkspacePage() {
   const subscription = useQuery({
     queryKey: ["business-subscription", membership.data?.businessId],
     enabled: Boolean(membership.data?.businessId),
+    refetchInterval: (query) => {
+      const returnedFromPayment = new URLSearchParams(window.location.search).get("payment") === "success"
+      return returnedFromPayment && query.state.data?.status !== "active" ? 2_000 : false
+    },
     queryFn: async () => {
       const { data, error } = await supabase
         .from("business_subscriptions")
@@ -129,24 +133,19 @@ export default function WorkspacePage() {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) throw new Error("Sign in again to continue to payment.")
-      const configuredUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
-      if (!configuredUrl) throw new Error("Supabase Project URL is missing. Set VITE_SUPABASE_URL in the environment used to start Vite, then restart the app.")
-      const supabaseUrl = configuredUrl.replace(/\/$/, "")
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
-      if (!anonKey) throw new Error("VITE_SUPABASE_ANON_KEY is missing. Set the active project's anon/public key and restart Vite.")
       let response: Response
       try {
-        response = await fetch(`${supabaseUrl}/functions/v1/server`, {
+        response = await fetch(`${supabaseUrl.replace(/\/$/, "")}/functions/v1/server`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${session.access_token}`,
-            apikey: anonKey,
+            apikey: supabaseAnonKey,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ plan, cycle: subscriptionBillingPreview }),
         })
       } catch (networkError) {
-        throw new Error(`Cannot connect to Supabase project ${new URL(supabaseUrl).host}. This URL is set in .env.local. Replace VITE_SUPABASE_URL with the active project's Project URL from Supabase → Project Settings → API, then restart Vite.`)
+        throw new Error(`Cannot connect to Supabase project ${new URL(supabaseUrl).host}. Check your network connection and try again.`)
       }
       const data = await response.json().catch(() => null)
       if (!response.ok) {

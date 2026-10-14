@@ -26,9 +26,15 @@ active Supabase project. Restart Vite after changing env values.
 
 Apply `supabase/migrations/subscription_checkouts.sql` before enabling checkout.
 In PayMongo Developers → Webhooks, register the public URL
-`https://<project-ref>.supabase.co/functions/v1/server/paymongo/webhook`
+`https://<project-ref>.supabase.co/functions/v1/paymongo-webhook`
 and subscribe to `checkout_session.payment.paid`. Configure and test the webhook
 in test mode before using live credentials.
+
+The checkout `server` function requires a signed-in Supabase user. The separate
+`paymongo-webhook` function is public so PayMongo can deliver events, but it
+rejects requests unless their timestamped HMAC signature matches
+`PAYMONGO_WEBHOOK_SECRET`. A matching paid session, reference number, and amount
+are required before it activates the business subscription.
 
 Plan prices are currently defined in `supabase/functions/server/index.tsx` in
 centavos: Starter ₱699 monthly / ₱6,999 yearly and Professional ₱999 monthly /

@@ -1,14 +1,14 @@
 import { createClient } from "@supabase/supabase-js"
+import { projectId, publicAnonKey } from "../../../utils/supabase/info"
 
 const configuredUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
 const configuredAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
-if (!configuredUrl || !configuredAnonKey) {
-  throw new Error("Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to the active Supabase project's URL and anon/public key.")
-}
+export const supabaseUrl = configuredUrl || `https://${projectId}.supabase.co`
+export const supabaseAnonKey = configuredAnonKey || publicAnonKey
 
 export const supabase = createClient(
-  configuredUrl,
-  configuredAnonKey,
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       persistSession: true,
