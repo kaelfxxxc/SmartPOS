@@ -28,6 +28,26 @@ pnpm format
 
 The Figma Make development server starts automatically. Do not start a second server.
 
+## Deploy to Vercel
+
+1. Push this repository to GitHub, GitLab, or Bitbucket and import it into Vercel.
+2. Keep the detected framework as Vite. The repository includes `vercel.json` with the build and SPA routing settings.
+3. Add these Environment Variables in Vercel for Preview and Production:
+
+```text
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-public-anon-key
+```
+
+4. In Supabase Authentication settings, add your Vercel deployment URL and `/onboarding` as allowed redirect URLs. Add your production custom domain too, if you use one.
+5. Deploy. Vercel runs `npm run build` and serves the generated `dist` directory.
+
+The frontend only needs the Supabase public anonymous key. Never add the Supabase service-role key to frontend environment variables.
+
+## Install as an app
+
+The production build includes a web manifest, install icons, and a service worker. On supported browsers, use the browser's install option to add SmartPOS to a phone, tablet, laptop, or desktop. HTTPS is required, which Vercel provides automatically.
+
 ## Important limitations
 
 - Credit sales, wallet ledgers, refunds, PWA synchronization, and advanced reporting remain later phases and do not generate simulated records.

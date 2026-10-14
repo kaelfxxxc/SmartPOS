@@ -1,0 +1,24 @@
+{
+  "name": "SmartPOS",
+  "short_name": "SmartPOS",
+  "description": "A practical, AI-native point of sale for growing businesses.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#142d4e",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/brand/smartpos-favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/brand/smartpos-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
