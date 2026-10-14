@@ -9,6 +9,7 @@ export type BarcodeScanResult = {
   detail?: string
   value?: string
   status?: "existing" | "new"
+  actionLabel?: string
 }
 
 type ScannerControls = { stop: () => void }
@@ -158,7 +159,7 @@ export default function BarcodeScanner({
             <p>{message}</p>
             {scanResult && <article className="scanner-product-result">
               {scanResult.imageUrl ? <img src={scanResult.imageUrl} alt={`${scanResult.name} package`} /> : <span className="scanner-product-placeholder"><ScanLine /></span>}
-              <div><span className={`scanner-result-status ${scanResult.status ?? "existing"}`}>{scanResult.status === "new" ? "New product" : "In inventory"}</span><b>{scanResult.name}</b><small>Barcode: {scanResult.barcode}</small>{scanResult.detail && <small>{scanResult.detail}</small>}{scanResult.value && <strong>{scanResult.value}</strong>}<Button variant="secondary" onClick={() => { completedScan.current = ""; lastScan.current = { value: "", at: 0 }; setScanResult(null); setMessage("Point the camera at a barcode") }}><ScanLine size={15} /> Scan another product</Button></div>
+              <div><span className={`scanner-result-status ${scanResult.status ?? "existing"}`}>{scanResult.status === "new" ? "New product" : "In inventory"}</span><b>{scanResult.name}</b><small>Barcode: {scanResult.barcode}</small>{scanResult.detail && <small>{scanResult.detail}</small>}{scanResult.value && <strong>{scanResult.value}</strong>}<Button onClick={() => setCameraOpen(false)}>{scanResult.actionLabel ?? "Continue"}</Button></div>
             </article>}
           </div>
         </div>

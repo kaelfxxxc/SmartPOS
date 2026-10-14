@@ -576,7 +576,9 @@ export function InventoryView({ context }: { context: BusinessContext }) {
           barcode: value,
           imageUrl: details?.imageUrl,
           detail: "Not yet in inventory · complete the product form to add it",
+          value: "Enter the selling price in the inventory form",
           status: "new" as const,
+          actionLabel: "Add to inventory",
         }
       } catch {
         if (sequence !== inventoryScanSequence.current) return
@@ -585,7 +587,9 @@ export function InventoryView({ context }: { context: BusinessContext }) {
           name: "New scanned product",
           barcode: value,
           detail: "Not yet in inventory · enter the product details below",
+          value: "Enter the selling price in the inventory form",
           status: "new" as const,
+          actionLabel: "Add to inventory",
         }
       } finally {
         if (sequence === inventoryScanSequence.current) setLookupBusy(false)
@@ -605,6 +609,7 @@ export function InventoryView({ context }: { context: BusinessContext }) {
       detail: `${stock} ${product.unit} currently in stock`,
       value: peso(product.price_centavos),
       status: "existing" as const,
+      actionLabel: "Add stock",
     }
     let imageUrl: string | null = null
     try {
@@ -621,6 +626,7 @@ export function InventoryView({ context }: { context: BusinessContext }) {
       detail: `${stock} ${product.unit} currently in stock`,
       value: peso(product.price_centavos),
       status: "existing" as const,
+      actionLabel: "Add stock",
     }
   }
 
@@ -765,6 +771,7 @@ export function PosView({ context }: { context: BusinessContext }) {
       detail: `${stock} ${product.unit} available · added to basket`,
       value: peso(product.price_centavos),
       status: "existing" as const,
+      actionLabel: "View checkout",
     }
     let imageUrl: string | null = null
     try {
@@ -781,6 +788,7 @@ export function PosView({ context }: { context: BusinessContext }) {
       detail: `${stock} ${product.unit} available · added to basket`,
       value: peso(product.price_centavos),
       status: "existing" as const,
+      actionLabel: "View checkout",
     }
   }
 
