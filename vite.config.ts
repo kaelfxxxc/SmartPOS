@@ -2,8 +2,12 @@ import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
+import { createReadStream, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 import siteConfiguration from './.figma/make/site.json'
+
+const projectRoot = path.dirname(fileURLToPath(import.meta.url))
 
 
 // Vite config — https://vitejs.dev/config/
@@ -11,14 +15,17 @@ export default defineConfig(({ mode }) => {
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
   const base = process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/'
+  const publicDir = path.join(projectRoot, 'public')
 
   return {
     base,
+    publicDir,
     build: {
       sourcemap: emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,
     },
     plugins: [
+      copySmartPosIconsPlugin(projectRoot),
 react(),
       tailwindcss(),
       figmaSiteConfiguration(siteConfiguration, base),
@@ -73,6 +80,34 @@ type FigmaSiteConfiguration = {
   accessibility?: {
     addBypassLinks?: boolean
   }
+}
+
+function copySmartPosIconsPlugin(root: string): Plugin {
+  return {
+    name: 'copy-smartpos-icons',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const iconName = req.url?.split('?')[0]?.match(/^\/brand\/(smart-pos-(?:logo|favicon)\.png)$/)?.[1]
+        if (!iconName) return next()
+
+        res.setHeader('Content-Type', 'image/png')
+        createReadStream(path.join(root, 'src/images/icons', iconName)).pipe(res)
+      })
+    },
+    generateBundle() {
+      for (const iconName of ['smart-pos-logo.png', 'smart-pos-favicon.png']) {
+        this.emitFile({
+          type: 'asset',
+          fileName: `brand/${iconName}`,
+          source: requireIconBytes(root, iconName),
+        })
+      }
+    },
+  }
+}
+
+function requireIconBytes(root: string, iconName: string): Buffer {
+  return readFileSync(path.join(root, 'src/images/icons', iconName))
 }
 
 /** Applies /.figma/make/site.json to the generated document shell. */

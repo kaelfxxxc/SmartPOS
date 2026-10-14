@@ -9,13 +9,13 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "./brand/smartpos-favicon.png",
+      "src": "./brand/smart-pos-favicon.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "./brand/smartpos-logo.png",
+      "src": "./brand/smart-pos-logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
