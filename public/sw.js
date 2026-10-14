@@ -55,7 +55,7 @@ self.addEventListener("fetch", (event) => {
   const { request } = event
   if (request.method !== "GET") return
   const url = new URL(request.url)
-  const isApiRequest = url.pathname.startsWith("/api/") || url.pathname.includes("/rest/v1/")
+  const isApiRequest = url.origin === self.location.origin && url.pathname.startsWith("/api/")
   if (isApiRequest) {
     event.respondWith(networkFirst(request, API_CACHE))
     return
