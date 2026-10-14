@@ -5,11 +5,14 @@ type OpenFoodFactsResponse = {
     product_name?: string
     product_name_en?: string
     quantity?: string
+    image_front_url?: string
+    image_url?: string
   }
 }
 
 export type OpenFoodFactsProduct = {
   name: string
+  imageUrl: string | null
 }
 
 const GTIN_PATTERN = /^\d{8}$|^\d{12,14}$/
@@ -38,7 +41,7 @@ export async function lookupOpenFoodFactsProduct(
   )
   url.searchParams.set(
     "fields",
-    "brands,product_name,product_name_en,quantity",
+    "brands,product_name,product_name_en,quantity,image_front_url,image_url",
   )
 
   const response = await fetch(url, {
@@ -55,5 +58,8 @@ export async function lookupOpenFoodFactsProduct(
   appendDistinct(parts, data.product.product_name || data.product.product_name_en)
   appendDistinct(parts, data.product.quantity)
 
-  return parts.length ? { name: parts.join(" ") } : null
+  const imageUrl = data.product.image_front_url || data.product.image_url || null
+  return parts.length || imageUrl
+    ? { name: parts.join(" ") || `Product ${normalized}`, imageUrl }
+    : null
 }

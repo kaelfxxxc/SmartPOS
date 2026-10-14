@@ -206,6 +206,7 @@ export function ProductsView({ context }: { context: BusinessContext }) {
   const [open, setOpen] = useState(false)
   const [barcode, setBarcode] = useState("")
   const [productName, setProductName] = useState("")
+  const [productImage, setProductImage] = useState<string | null>(null)
   const [editing, setEditing] = useState<Product | null>(null)
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
@@ -220,9 +221,20 @@ export function ProductsView({ context }: { context: BusinessContext }) {
       product.product_barcodes.some((item) => item.barcode === normalized),
     )
     if (existing) {
-      lookupSequence.current += 1
-      setLookupBusy(false)
+      const sequence = ++lookupSequence.current
+      setLookupBusy(true)
       setMessage(`${existing.name} already uses barcode ${normalized}.`)
+      setProductName(existing.name)
+      setBarcode(normalized)
+      setOpen(true)
+      try {
+        const match = await lookupOpenFoodFactsProduct(normalized)
+        if (sequence === lookupSequence.current) setProductImage(match?.imageUrl ?? null)
+      } catch {
+        if (sequence === lookupSequence.current) setProductImage(null)
+      } finally {
+        if (sequence === lookupSequence.current) setLookupBusy(false)
+      }
       return
     }
 
@@ -237,6 +249,7 @@ export function ProductsView({ context }: { context: BusinessContext }) {
       if (sequence !== lookupSequence.current) return
       if (match) {
         setProductName((current) => current.trim() || match.name)
+        setProductImage(match.imageUrl)
         setMessage(
           "Product details found via Open Food Facts. Confirm the name and enter your store prices.",
         )
@@ -260,6 +273,7 @@ export function ProductsView({ context }: { context: BusinessContext }) {
     setLookupBusy(false)
     setBarcode("")
     setProductName("")
+    setProductImage(null)
     setMessage("")
     setOpen(false)
   }
@@ -342,6 +356,7 @@ export function ProductsView({ context }: { context: BusinessContext }) {
       />
       {open && (
         <form className="inline-form panel" onSubmit={addProduct}>
+          {productImage && <div className="barcode-product-preview"><img src={productImage} alt={`${productName || "Scanned product"} package`} /><div><b>{productName || "Product found"}</b><small>Product image from Open Food Facts</small></div></div>}
           <Field label="Product name" name="name" required value={productName} onChange={(event) => setProductName(event.target.value)} placeholder="Product name" />
           <Field label="SKU" name="sku" placeholder="Optional SKU" />
           <Field label="Barcode" name="barcode" value={barcode} onChange={(event) => setBarcode(event.target.value)} onBlur={() => void prepareNewBarcode(barcode)} placeholder="Scan or enter barcode" />
@@ -439,6 +454,9 @@ export function PosView({ context }: { context: BusinessContext }) {
   const [cart, setCart] = useState<Record<string, CartLine>>({})
   const [tendered, setTendered] = useState("")
   const [message, setMessage] = useState("")
+  const [scannedProduct, setScannedProduct] = useState<Product | null>(null)
+  const [scannedImage, setScannedImage] = useState<string | null>(null)
+  const scanSequence = useRef(0)
   const [busy, setBusy] = useState(false)
   const [receipt, setReceipt] = useState<{
     receipt_number: string
@@ -511,14 +529,28 @@ export function PosView({ context }: { context: BusinessContext }) {
         <div className="product-browser panel">
           <BarcodeScanner
             compact
-            onDetected={(value) => {
+            onDetected={async (value) => {
               const product = products.data?.find((item) =>
                 item.product_barcodes.some((barcode) => barcode.barcode === value),
               )
               if (!product) return setMessage(`Product not found for barcode ${value}.`)
+              setScannedProduct(product)
+              setScannedImage(null)
               setQuantity(product, (cart[product.id]?.quantity ?? 0) + 1)
+              const sequence = ++scanSequence.current
+              try {
+                const details = await lookupOpenFoodFactsProduct(value)
+                if (sequence === scanSequence.current) setScannedImage(details?.imageUrl ?? null)
+              } catch {
+                if (sequence === scanSequence.current) setScannedImage(null)
+              }
             }}
           />
+          {scannedProduct && <div className="barcode-product-preview checkout-scan-result">
+            {scannedImage ? <img src={scannedImage} alt={`${scannedProduct.name} package`} /> : <span className="barcode-product-placeholder"><Package /></span>}
+            <div><b>{scannedProduct.name}</b><small>{scannedProduct.product_barcodes[0]?.barcode || scannedProduct.sku || "Scanned product"}</small><strong>{peso(scannedProduct.price_centavos)}</strong></div>
+            <Button variant="ghost" aria-label="Dismiss scanned product" onClick={() => { scanSequence.current += 1; setScannedProduct(null); setScannedImage(null) }}>×</Button>
+          </div>}
           <label className="product-search"><Search size={18}/><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…" /></label>
           <div className="product-card-grid">
             {visibleProducts.map((product) => {

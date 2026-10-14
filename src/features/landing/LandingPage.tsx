@@ -429,29 +429,6 @@ export default function LandingPage() {
           </small>
         </div>
       </section>
-      <section className="section business-section">
-        <div className="section-intro centered">
-          <span className="eyebrow">Made for your kind of business</span>
-          <h2>One smart system, many ways to sell.</h2>
-        </div>
-        <div className="category-grid">
-          {[
-            [Store, "Sari-sari stores"],
-            [UtensilsCrossed, "Carinderias & cafés"],
-            [ShoppingBasket, "Mini groceries"],
-            [Box, "Food stalls & kiosks"],
-          ].map(([Icon, title]) => (
-            <article key={title as string}>
-              <Icon />
-              <div>
-                <h3>{title as string}</h3>
-                <p>Simple, fast, and flexible workflows</p>
-              </div>
-              <ArrowRight />
-            </article>
-          ))}
-        </div>
-      </section>
       <section className="security-section" id="about">
         <div>
           <span className="eyebrow">Security by design</span>
@@ -473,6 +450,29 @@ export default function LandingPage() {
           <ShieldCheck />
           <b>Protected workspace</b>
           <span>Supabase Auth · PostgreSQL RLS · Secure sessions</span>
+        </div>
+      </section>
+      <section className="section business-section">
+        <div className="section-intro centered">
+          <span className="eyebrow">Made for your kind of business</span>
+          <h2>One smart system, many ways to sell.</h2>
+        </div>
+        <div className="category-grid">
+          {[
+            [Store, "Sari-sari stores"],
+            [UtensilsCrossed, "Carinderias & cafés"],
+            [ShoppingBasket, "Mini groceries"],
+            [Box, "Food stalls & kiosks"],
+          ].map(([Icon, title]) => (
+            <article key={title as string}>
+              <Icon />
+              <div>
+                <h3>{title as string}</h3>
+                <p>Simple, fast, and flexible workflows</p>
+              </div>
+              <ArrowRight />
+            </article>
+          ))}
         </div>
       </section>
       <section className="section pricing-section" id="pricing">
