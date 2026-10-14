@@ -15,6 +15,7 @@ import {
   Settings,
   ShoppingCart,
   Users,
+  WalletCards,
   X,
 } from "lucide-react"
 import { useNavigate } from "react-router"
@@ -23,6 +24,7 @@ import storeIcon from "@/images/icons/store-svgrepo-com.svg"
 import { supabase } from "@/lib/supabase/client"
 import {
   DashboardView,
+  DigitalLedgerView,
   CreditView,
   InventoryView,
   NotificationsView,
@@ -46,6 +48,7 @@ const coreNav = [
 ] as const
 
 const storeNav = [
+  [WalletCards, "Digital Ledger", "ledger"],
   [CreditCard, "Utang / Credit", "credit"],
   [Users, "Customers & Staff", "people"],
   [Settings, "Hardware & Settings", "settings"],
@@ -270,6 +273,7 @@ export default function WorkspacePage() {
             <InventoryView context={context} />
           )}
           {context && view === "sales" && <SalesView context={context} />}
+          {context && view === "ledger" && <DigitalLedgerView context={context} />}
           {context && view === "credit" && <CreditView context={context} />}
           {context && view === "people" && <PeopleView context={context} />}
           {context && view === "settings" && <SettingsView context={context} />}

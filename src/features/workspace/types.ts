@@ -25,6 +25,7 @@ export type WorkspaceView =
   | "pos"
   | "inventory"
   | "sales"
+  | "ledger"
   | "credit"
   | "people"
   | "settings"
