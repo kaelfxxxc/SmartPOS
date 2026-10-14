@@ -99,15 +99,15 @@ export function CheckboxField({
   )
 }
 
-export function Logo({ light = false }: { light?: boolean }) {
+export function Logo({ light = false, transparent = false }: { light?: boolean; transparent?: boolean }) {
   return (
     <AppLink
       to="/"
-      className={`logo ${light ? "logo-light" : ""}`}
+      className={`logo ${light ? "logo-light" : ""} ${transparent ? "logo-transparent" : ""}`}
       aria-label="SmartPOS — Your AI-native POS"
     >
       <img
-        src={`${import.meta.env.BASE_URL}brand/smart-pos-logo.png`}
+        src={`${import.meta.env.BASE_URL}brand/${transparent ? "smart-pos-logo-transparent" : "smart-pos-logo"}.png`}
         alt="SmartPOS — Your AI-native POS"
       />
     </AppLink>

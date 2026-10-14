@@ -53,6 +53,44 @@ html,body,#root{width:100%;max-width:100%;overflow-x:hidden}.workspace-main,.das
 @media(max-width:700px){.barcode-scanner{align-items:stretch;flex-direction:column}.keyboard-hint{display:none}.barcode-scanner .btn{width:100%}.camera-viewport{height:55vh}.receipt-shell{padding:8px}.print-receipt{padding:26px 18px}}
 @media print{body *{visibility:hidden!important}.receipt-overlay,.receipt-overlay *{visibility:visible!important}.receipt-overlay{position:absolute;inset:0;background:white;padding:0}.receipt-shell{width:80mm;max-height:none;overflow:visible;padding:0;background:white}.receipt-actions,.checkout-success,.checkout-success-products{display:none!important}.print-receipt{box-shadow:none;width:80mm;min-height:auto;padding:8mm 5mm}@page{size:80mm auto;margin:0}}
 
+/* PWA install control */
+.pwa-install-button,.landing-pwa-install{
+  position:fixed;
+  right:18px;
+  bottom:max(18px,env(safe-area-inset-bottom));
+  z-index:110;
+  display:inline-flex;
+  min-height:46px;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:10px 16px;
+  border:1px solid rgba(255,255,255,.35);
+  border-radius:999px;
+  background:#078264;
+  color:#fff;
+  box-shadow:0 12px 30px rgba(7,44,38,.28);
+  white-space:nowrap;
+}
+.pwa-install-button:hover,.landing-pwa-install:hover{background:#066d55;color:#fff}
+.pwa-install-help,.landing-install-help{
+  position:fixed;
+  right:18px;
+  bottom:calc(max(18px,env(safe-area-inset-bottom)) + 58px);
+  left:auto;
+  top:auto;
+  z-index:109;
+  width:min(360px,calc(100vw - 36px));
+  margin:0;
+  box-shadow:0 12px 35px rgba(8,45,38,.18);
+}
+
+@media screen and (max-width:430px){
+  .pwa-install-button,.landing-pwa-install{right:12px;bottom:max(12px,env(safe-area-inset-bottom));min-height:44px;padding:9px 14px}
+  .pwa-install-button span,.landing-pwa-install span{display:inline;font-size:.68rem}
+  .pwa-install-help,.landing-install-help{right:12px;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 56px);width:calc(100vw - 24px)}
+}
+
 @media screen and (max-width:700px){
   .landing-nav .logo{height:50px}
   .hero-copy>p{font-size:.88rem}
@@ -294,7 +332,13 @@ html,body,#root{width:100%;max-width:100%;overflow-x:hidden}.workspace-main,.das
   .kpi-card strong{font-size:1.4rem}
   .setup-banner{padding:14px}
   .product-card-grid{grid-template-columns:1fr}
-  .inventory-card{grid-template-columns:auto minmax(0,1fr) auto}
+  .inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .inventory-card{grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:9px;padding:12px}
+  .inventory-card>.product-list-image,.inventory-card>.inventory-icon{grid-column:1/-1;width:48px;height:48px;margin-inline:auto}
+  .inventory-card>div{min-width:0}
+  .inventory-card b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .inventory-card strong{font-size:1rem}
+  .inventory-card>.btn{grid-column:1/-1;min-height:38px;padding:8px;font-size:.68rem}
   .person-row{grid-template-columns:auto minmax(0,1fr)}
   .person-row>i{grid-column:2;width:max-content}
   .cart-heading{align-items:flex-start;gap:8px}
@@ -351,11 +395,10 @@ html,body,#root{width:100%;max-width:100%;overflow-x:hidden}.workspace-main,.das
 /* Authenticated SmartPOS control-room visual system */
 .workspace{--ops-ink:#090f22;--ops-ink-soft:#111a31;--ops-green:#14b889;--ops-green-dark:#078264;--ops-canvas:#f5f7fb;--ops-border:#dde3ec;--ops-muted:#7a8799;background:var(--ops-canvas);color:#152033}
 .workspace .sidebar{width:280px;padding:24px 18px;background:var(--ops-ink);border-right:1px solid #1d2840;color:white;z-index:40}
-.workspace .sidebar-logo-row{align-items:flex-start;border-bottom:1px solid #1d2840;padding:0 8px 22px;margin:0 -4px 18px}
-.workspace .workspace-brand{display:flex;flex-direction:column;gap:0;min-width:0}
-.workspace .workspace-brand .logo{width:166px;height:52px;padding:0;margin:0;justify-content:flex-start}
-.workspace .workspace-brand .logo-light{background:transparent;border-radius:0}
-.workspace .workspace-brand>span{color:#8f9ab0;font-size:.67rem;margin-left:5px;margin-top:-4px;letter-spacing:.01em}
+.workspace .sidebar-logo-row{align-items:center;justify-content:center;position:relative;border-bottom:1px solid #1d2840;padding:0 8px 22px;margin:0 -4px 18px}
+.workspace .workspace-brand{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;min-width:0;width:100%}
+.workspace .workspace-brand .logo{width:72px;height:72px;padding:0;margin:0 auto;justify-content:center}
+.workspace .workspace-brand .logo-light{background:white;border-radius:14px;overflow:hidden}
 .workspace .sidebar nav{gap:3px}
 .workspace .sidebar-section-label{display:block;color:#69758d;font-size:.61rem;font-weight:800;letter-spacing:.11em;text-transform:uppercase;padding:13px 13px 7px}
 .workspace .sidebar .nav-item{min-height:47px;border-radius:10px;padding:0 14px;gap:13px;color:#b6c0d0;font-size:.8rem;font-weight:600;position:relative}
@@ -371,6 +414,7 @@ html,body,#root{width:100%;max-width:100%;overflow-x:hidden}.workspace-main,.das
 .workspace .business-switcher{min-width:250px;min-height:54px;padding:8px 13px;border:1px solid var(--ops-border);border-radius:14px;background:#fbfcfe;justify-content:flex-start}
 .workspace .business-switcher:hover{transform:none;background:white;border-color:#cdd6e1}
 .workspace .business-switcher .mini-icon{width:36px;height:36px;border-radius:10px;background:#e6fbf4;color:var(--ops-green-dark)}
+.workspace .business-switcher .mini-icon img{display:block;width:20px;height:20px;object-fit:contain}
 .workspace .business-switcher b{color:#172033;font-size:.75rem;letter-spacing:.05em;text-transform:uppercase}
 .workspace .business-switcher small{color:#758196;font-size:.62rem}
 .workspace .business-switcher>svg{margin-left:auto;color:#9ba6b7}
@@ -441,7 +485,7 @@ html,body,#root{width:100%;max-width:100%;overflow-x:hidden}.workspace-main,.das
   .workspace .sidebar{width:86px;padding-inline:10px}
   .workspace .workspace-main{margin-left:86px;width:calc(100% - 86px)}
   .workspace .sidebar-logo-row{padding-inline:0}
-  .workspace .workspace-brand .logo{width:62px;height:52px;margin-inline:auto}
+  .workspace .workspace-brand .logo{width:62px;height:62px;margin-inline:auto}
   .workspace .workspace-brand>span,.workspace .sidebar-section-label,.workspace .sidebar .nav-item span,.workspace .sidebar-help{display:none}
   .workspace .sidebar .nav-item{justify-content:center;padding:0}
   .workspace .sidebar .nav-item.active{box-shadow:inset 3px 0 0 #28d59f}
@@ -461,7 +505,8 @@ html,body,#root{width:100%;max-width:100%;overflow-x:hidden}.workspace-main,.das
   .workspace .workspace-main{margin-left:0;width:100%}
   .workspace .sidebar{display:none;width:min(86vw,300px);padding:20px 14px}
   .workspace .sidebar.mobile-open{display:flex}
-  .workspace .workspace-brand .logo{width:150px}
+  .workspace .sidebar-logo-row{justify-content:center;padding-inline:42px}
+  .workspace .workspace-brand .logo{width:72px;height:72px}
   .workspace .sidebar-section-label{display:block}
   .workspace .workspace-header{height:66px;padding-inline:7px;gap:4px}
   .workspace .business-switcher{min-width:0;min-height:48px;border:0;background:transparent;padding:5px;flex:1}
@@ -489,4 +534,28 @@ html,body,#root{width:100%;max-width:100%;overflow-x:hidden}.workspace-main,.das
   .workspace .kpi-grid{grid-template-columns:1fr}
   .workspace .kpi-card{min-height:130px}
   .workspace .dashboard-actions{grid-template-columns:1fr}
+}
+
+@media screen and (max-width:700px){
+  .workspace .inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .workspace .inventory-card{grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:9px;padding:12px}
+  .workspace .inventory-card>.product-list-image,
+  .workspace .inventory-card>.inventory-icon{grid-column:1/-1;width:48px;height:48px;margin-inline:auto}
+  .workspace .inventory-card>div{min-width:0}
+  .workspace .inventory-card b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .workspace .inventory-card strong{font-size:1rem}
+  .workspace .inventory-card>.btn{grid-column:1/-1;min-height:38px;width:100%;padding:8px;font-size:.68rem}
+  .workspace .inventory-dashboard-title>div,
+  .workspace .pos-dashboard-title>div{width:100%}
+  .workspace .pos-title-line{display:flex;align-items:center;flex-direction:row;flex-wrap:nowrap;justify-content:space-between;gap:10px;width:100%}
+  .workspace .pos-title-line h1{min-width:0;margin:0}
+  .workspace .pos-title-line .barcode-scanner.compact{flex:0 0 auto;width:auto;margin:0;padding:0;border:0;background:transparent;box-shadow:none}
+  .workspace .pos-title-line .barcode-scanner .btn{width:auto;min-height:40px;padding:8px 11px;white-space:nowrap}
+  .workspace .pos-title-line .mobile-scan-notice{flex:0 0 auto}
+}
+
+@media screen and (max-width:360px){
+  .workspace .pos-title-line{gap:7px}
+  .workspace .pos-title-line .barcode-scanner .btn{width:40px;padding:0}
+  .workspace .pos-title-line .barcode-scanner .btn span{display:none}
 }

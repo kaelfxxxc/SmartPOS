@@ -14,12 +14,12 @@ import {
   Search,
   Settings,
   ShoppingCart,
-  Store,
   Users,
   X,
 } from "lucide-react"
 import { useNavigate } from "react-router"
 import { Button, Logo } from "@/components/ui"
+import storeIcon from "@/images/icons/store-svgrepo-com.svg"
 import { supabase } from "@/lib/supabase/client"
 import {
   DashboardView,
@@ -146,7 +146,7 @@ export default function WorkspacePage() {
       )}
       <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
         <div className="sidebar-logo-row">
-          <div className="workspace-brand"><Logo light /><span>Philippine Cloud POS</span></div>
+          <div className="workspace-brand"><Logo light /></div>
           <Button
             variant="ghost"
             className="sidebar-close"
@@ -185,7 +185,6 @@ export default function WorkspacePage() {
         <div className="sidebar-help">
           <Cloud size={20} />
           <b>Connected & secure</b>
-          <small>Records sync with Supabase</small>
         </div>
       </aside>
       <main className="workspace-main">
@@ -204,7 +203,7 @@ export default function WorkspacePage() {
             onClick={() => changeView("settings")}
           >
             <span className="mini-icon">
-              <Store size={18} />
+              <img src={storeIcon} alt="" />
             </span>
             <div>
               <b>{context?.businessName ?? "Loading business…"}</b>

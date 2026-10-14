@@ -149,7 +149,7 @@ export default function BarcodeScanner({
         <div><b>Barcode scanner</b><small>{message}</small></div>
       </div>
       <Button variant="secondary" onClick={() => { completedScan.current = ""; setScanResult(null); setMessage("Scanner ready"); setCameraOpen(true) }}>
-        <Camera size={17} /> Scan with camera
+        <Camera size={17} /> <span>Scan with camera</span>
       </Button>
       {cameraOpen && (
         <div className="camera-overlay" role="dialog" aria-modal="true" aria-label="Barcode camera scanner">
