@@ -32,14 +32,17 @@ import {
 } from "./WorkspaceViews"
 import type { BusinessContext, WorkspaceView } from "./types"
 
-const nav = [
+const coreNav = [
   [LayoutDashboard, "Dashboard", "dashboard"],
-  [ShoppingCart, "POS / Checkout", "pos"],
-  [Boxes, "Inventory", "inventory"],
+  [ShoppingCart, "POS / Cashier", "pos"],
+  [Boxes, "Inventory & Stock", "inventory"],
   [CircleDollarSign, "Sales & Reports", "sales"],
+] as const
+
+const storeNav = [
   [CreditCard, "Utang / Credit", "credit"],
   [Users, "Customers & Staff", "people"],
-  [Settings, "Settings", "settings"],
+  [Settings, "Hardware & Settings", "settings"],
 ] as const
 
 export default function WorkspacePage() {
@@ -102,7 +105,7 @@ export default function WorkspacePage() {
       )}
       <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
         <div className="sidebar-logo-row">
-          <Logo light />
+          <div className="workspace-brand"><Logo light /><span>Philippine Cloud POS</span></div>
           <Button
             variant="ghost"
             className="sidebar-close"
@@ -113,7 +116,20 @@ export default function WorkspacePage() {
           </Button>
         </div>
         <nav aria-label="Workspace navigation">
-          {nav.map(([Icon, label, key]) => (
+          <span className="sidebar-section-label">Core operations</span>
+          {coreNav.map(([Icon, label, key]) => (
+            <Button
+              variant="ghost"
+              className={view === key ? "nav-item active" : "nav-item"}
+              key={key}
+              onClick={() => changeView(key)}
+            >
+              <Icon size={20} />
+              <span>{label}</span>
+            </Button>
+          ))}
+          <span className="sidebar-section-label">Philippine store features</span>
+          {storeNav.map(([Icon, label, key]) => (
             <Button
               variant="ghost"
               className={view === key ? "nav-item active" : "nav-item"}
@@ -167,6 +183,7 @@ export default function WorkspacePage() {
           <span className="online-pill">
             <i /> Online
           </span>
+          <span className="system-ready-pill">System ready</span>
           <Button
             variant="ghost"
             className="icon-button"

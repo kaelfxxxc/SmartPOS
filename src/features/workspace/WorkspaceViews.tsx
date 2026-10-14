@@ -169,12 +169,10 @@ export function DashboardView({
       <div className="dashboard-title">
         <div>
           <span className="eyebrow">Business overview</span>
-          <h1>Magandang araw!</h1>
-          <p>Confirmed business records for today.</p>
+          <h1>Magandang araw, {context.businessName}!</h1>
+          <p>Confirmed real-time business records · Philippine Standard Time</p>
         </div>
-        <Button onClick={() => onNavigate("pos")}>
-          <Plus size={18} /> New sale
-        </Button>
+        <div className="dashboard-actions"><Button variant="secondary" onClick={() => onNavigate("inventory")}><Search size={18}/> Scan product</Button><Button onClick={() => onNavigate("pos")}><Plus size={18} /> New sale / Open register</Button></div>
       </div>
       {!products.isLoading && products.data?.length === 0 && (
         <div className="setup-banner">
@@ -202,11 +200,11 @@ export function DashboardView({
           ["Completed transactions", String(sales.data?.length ?? 0)],
           ["Items sold", String(totals.items)],
           ["Low-stock products", String(lowStock)],
-        ].map(([label, value]) => (
-          <article className="kpi-card" key={label}>
+        ].map(([label, value], index) => (
+          <article className={`kpi-card kpi-card-${index + 1}`} key={label}>
             <span>{label}</span>
             <strong>{sales.isLoading || products.isLoading ? "—" : value}</strong>
-            <small>Confirmed synchronized data</small>
+            <small>{index === 3 && lowStock > 0 ? "Items under threshold" : "Confirmed synchronized data"}</small>
           </article>
         ))}
       </div>
