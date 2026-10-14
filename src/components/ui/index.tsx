@@ -107,7 +107,7 @@ export function Logo({ light = false }: { light?: boolean }) {
       aria-label="SmartPOS — Your AI-native POS"
     >
       <img
-        src="/brand/smartpos-logo.png"
+        src={`${import.meta.env.BASE_URL}brand/smartpos-logo.png`}
         alt="SmartPOS — Your AI-native POS"
       />
     </AppLink>
