@@ -57,6 +57,8 @@ export default function WorkspacePage() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [subscriptionOpen, setSubscriptionOpen] = useState(false)
   const [subscriptionBillingPreview, setSubscriptionBillingPreview] = useState<"monthly" | "annual">("monthly")
+  const [checkoutError, setCheckoutError] = useState("")
+  const [checkoutLoading, setCheckoutLoading] = useState<"starter" | "professional" | null>(null)
   const [installHelp, setInstallHelp] = useState(false)
   const { installed, requestInstall } = usePwaInstall()
 
@@ -119,6 +121,46 @@ export default function WorkspacePage() {
   function changeView(next: WorkspaceView) {
     setView(next)
     setMobileOpen(false)
+  }
+
+  async function buyPlan(plan: "starter" | "professional") {
+    setCheckoutError("")
+    setCheckoutLoading(plan)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error("Sign in again to continue to payment.")
+      const configuredUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
+      if (!configuredUrl) throw new Error("Supabase Project URL is missing. Set VITE_SUPABASE_URL in the environment used to start Vite, then restart the app.")
+      const supabaseUrl = configuredUrl.replace(/\/$/, "")
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
+      if (!anonKey) throw new Error("VITE_SUPABASE_ANON_KEY is missing. Set the active project's anon/public key and restart Vite.")
+      let response: Response
+      try {
+        response = await fetch(`${supabaseUrl}/functions/v1/server`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: anonKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ plan, cycle: subscriptionBillingPreview }),
+        })
+      } catch (networkError) {
+        throw new Error(`Cannot connect to Supabase project ${new URL(supabaseUrl).host}. This URL is set in .env.local. Replace VITE_SUPABASE_URL with the active project's Project URL from Supabase → Project Settings → API, then restart Vite.`)
+      }
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(data?.error || `Supabase function returned HTTP ${response.status}. Check that the "server" function is deployed.`)
+      }
+      if (!data?.checkoutUrl) {
+        throw new Error(data?.error || "The server function responded without a checkout URL. Redeploy the updated server function.")
+      }
+      if (!data?.checkoutUrl || !data.checkoutUrl.startsWith("https://checkout.paymongo.com/")) throw new Error(data?.error || "PayMongo returned an invalid checkout link.")
+      window.location.assign(data.checkoutUrl)
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : "Unable to start checkout. Please try again.")
+      setCheckoutLoading(null)
+    }
   }
 
   const context = membership.data
@@ -195,7 +237,7 @@ export default function WorkspacePage() {
       {subscriptionOpen && subscription.data && (() => {
         const expiration = subscription.data.status === "trialing" ? subscription.data.trial_ends_at : subscription.data.current_period_ends_at
         const planLabel = subscription.data.status === "trialing" ? "7-Day Free Trial" : subscription.data.plan === "professional" ? "Professional" : "Starter"
-        return <div className="subscription-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSubscriptionOpen(false) }}><section className="subscription-dialog" role="dialog" aria-modal="true" aria-labelledby="subscription-dialog-title"><header><div><span><CalendarDays size={22}/></span><div><small>Current subscription</small><h2 id="subscription-dialog-title">{planLabel}</h2></div></div><Button variant="ghost" aria-label="Close subscription details" onClick={() => setSubscriptionOpen(false)}><X size={20}/></Button></header><div className="subscription-billing-toggle" role="group" aria-label="Billing cycle"><button type="button" className={subscriptionBillingPreview === "monthly" ? "active" : ""} onClick={() => setSubscriptionBillingPreview("monthly")}>Monthly</button><button type="button" className={subscriptionBillingPreview === "annual" ? "active" : ""} onClick={() => setSubscriptionBillingPreview("annual")}>Yearly</button></div><div className="subscription-options"><article className="subscription-free-plan"><b>7-Day Free Trial</b><strong>Free</strong>{subscription.data.status === "trialing" && <small className="subscription-trial-expiry">Trial expires {expiration ? new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeZone: "Asia/Manila" }).format(new Date(expiration)) : "No date"}</small>}<ul><li>Up to 50 products</li><li>10 AI scans during trial</li><li>Basic inventory &amp; expiration alerts</li></ul></article><article><b>Starter</b><strong>{subscriptionBillingPreview === "annual" ? "₱6,999" : "₱699"}<small>/{subscriptionBillingPreview === "annual" ? "year" : "month"}</small></strong>{subscriptionBillingPreview === "annual" && <em>Billed yearly</em>}<ul><li>Up to 500 products</li><li>100 AI scans per month</li><li>Food waste reports &amp; storage areas</li></ul></article><article><b>Professional</b><strong>{subscriptionBillingPreview === "annual" ? "₱9,999" : "₱999"}<small>/{subscriptionBillingPreview === "annual" ? "year" : "month"}</small></strong>{subscriptionBillingPreview === "annual" && <em>Billed yearly</em>}<ul><li>Up to 500 products</li><li>Unlimited AI scans</li><li>Multiple staff &amp; advanced reporting</li></ul></article></div><footer><Button variant="ghost" onClick={() => setSubscriptionOpen(false)}>Close</Button><Button onClick={() => { setSubscriptionOpen(false); changeView("settings") }}>Open subscription settings</Button></footer></section></div>
+        return <div className="subscription-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSubscriptionOpen(false) }}><section className="subscription-dialog" role="dialog" aria-modal="true" aria-labelledby="subscription-dialog-title"><header><div><span><CalendarDays size={22}/></span><div><small>Current subscription</small><h2 id="subscription-dialog-title">{planLabel}</h2></div></div><Button variant="ghost" aria-label="Close subscription details" onClick={() => setSubscriptionOpen(false)}><X size={20}/></Button></header><div className="subscription-billing-toggle" role="group" aria-label="Billing cycle"><button type="button" className={subscriptionBillingPreview === "monthly" ? "active" : ""} onClick={() => setSubscriptionBillingPreview("monthly")}>Monthly</button><button type="button" className={subscriptionBillingPreview === "annual" ? "active" : ""} onClick={() => setSubscriptionBillingPreview("annual")}>Yearly</button></div><div className="subscription-options">{checkoutError && <p className="subscription-checkout-error" role="alert">{checkoutError}</p>}<article className="subscription-free-plan"><b>7-Day Free Trial</b><strong>Free</strong>{subscription.data.status === "trialing" && <small className="subscription-trial-expiry">Trial expires {expiration ? new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeZone: "Asia/Manila" }).format(new Date(expiration)) : "No date"}</small>}<ul><li>Up to 50 products</li><li>10 AI scans during trial</li><li>Basic inventory &amp; expiration alerts</li></ul></article><article className="subscription-recommended-plan"><span className="subscription-recommended-badge">Best choice</span><b>Starter</b><strong>{subscriptionBillingPreview === "annual" ? "₱6,999" : "₱699"}<small>/{subscriptionBillingPreview === "annual" ? "year" : "month"}</small></strong>{subscriptionBillingPreview === "annual" && <em>Billed yearly</em>}<ul><li>Up to 500 products</li><li>100 AI scans per month</li><li>Food waste reports &amp; storage areas</li></ul><Button className="subscription-buy-plan" loading={checkoutLoading === "starter"} disabled={checkoutLoading !== null} onClick={() => buyPlan("starter")}>Buy plan</Button></article><article className="subscription-professional-plan"><b>Professional</b><strong>{subscriptionBillingPreview === "annual" ? "₱9,999" : "₱999"}<small>/{subscriptionBillingPreview === "annual" ? "year" : "month"}</small></strong>{subscriptionBillingPreview === "annual" && <em>Billed yearly</em>}<ul><li>Up to 500 products</li><li>Unlimited AI scans</li><li>Multiple staff &amp; advanced reporting</li></ul><Button className="subscription-buy-plan" loading={checkoutLoading === "professional"} disabled={checkoutLoading !== null} onClick={() => buyPlan("professional")}>Buy plan</Button></article></div></section></div>
       })()}
       <main className="workspace-main">
         <header className="workspace-header">
