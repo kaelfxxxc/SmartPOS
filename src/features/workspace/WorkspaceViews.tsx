@@ -550,85 +550,82 @@ export function InventoryView({ context }: { context: BusinessContext }) {
     await queryClient.invalidateQueries({ queryKey: ["products"] })
   }
 
+  async function scanInventoryProduct(value: string) {
+    const product = products.data?.find((item) =>
+      item.product_barcodes.some((barcode) => barcode.barcode === value),
+    )
+    if (!product) {
+      const sequence = ++inventoryScanSequence.current
+      setSelected(null)
+      setSelectedImage(null)
+      setNewProduct({ barcode: value, name: "", imageUrl: null })
+      setLookupBusy(true)
+      setMessage(`Barcode ${value} is new. Looking up product information…`)
+      try {
+        const details = await lookupOpenFoodFactsProduct(value)
+        if (sequence !== inventoryScanSequence.current) return
+        setNewProduct({
+          barcode: value,
+          name: details?.name ?? "",
+          imageUrl: details?.imageUrl ?? null,
+        })
+        setMessage(details ? "Product information found. Confirm the details below." : "Barcode scanned successfully. Enter the product details below.")
+        return {
+          name: details?.name ?? "New scanned product",
+          barcode: value,
+          imageUrl: details?.imageUrl,
+          detail: "Not yet in inventory · complete the product form to add it",
+          status: "new" as const,
+        }
+      } catch {
+        if (sequence !== inventoryScanSequence.current) return
+        setMessage("Barcode scanned successfully. Product lookup is unavailable, so enter the details below.")
+        return {
+          name: "New scanned product",
+          barcode: value,
+          detail: "Not yet in inventory · enter the product details below",
+          status: "new" as const,
+        }
+      } finally {
+        if (sequence === inventoryScanSequence.current) setLookupBusy(false)
+      }
+    }
+    setLookupBusy(false)
+    setNewProduct(null)
+    setSelected(product)
+    setSelectedImage(product.image_path)
+    setMessage(`${product.name} found. Enter stock quantity to confirm.`)
+    const sequence = ++inventoryScanSequence.current
+    const stock = Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)
+    if (product.image_path) return {
+      name: product.name,
+      barcode: value,
+      imageUrl: product.image_path,
+      detail: `${stock} ${product.unit} currently in stock`,
+      value: peso(product.price_centavos),
+      status: "existing" as const,
+    }
+    let imageUrl: string | null = null
+    try {
+      const details = await lookupOpenFoodFactsProduct(value)
+      imageUrl = details?.imageUrl ?? null
+      if (sequence === inventoryScanSequence.current) setSelectedImage(imageUrl)
+    } catch {
+      if (sequence === inventoryScanSequence.current) setSelectedImage(null)
+    }
+    return {
+      name: product.name,
+      barcode: value,
+      imageUrl,
+      detail: `${stock} ${product.unit} currently in stock`,
+      value: peso(product.price_centavos),
+      status: "existing" as const,
+    }
+  }
+
   return (
     <section>
-      <div className="dashboard-title"><div><span className="eyebrow">Stock control</span><h1>Inventory</h1><p>Receive stock only after confirmation.</p></div></div>
-      <BarcodeScanner
-        compact
-        onDetected={async (value) => {
-          const product = products.data?.find((item) =>
-            item.product_barcodes.some((barcode) => barcode.barcode === value),
-          )
-          if (!product) {
-            const sequence = ++inventoryScanSequence.current
-            setSelected(null)
-            setSelectedImage(null)
-            setNewProduct({ barcode: value, name: "", imageUrl: null })
-            setLookupBusy(true)
-            setMessage(`Barcode ${value} is new. Looking up product information…`)
-            try {
-              const details = await lookupOpenFoodFactsProduct(value)
-              if (sequence !== inventoryScanSequence.current) return
-              setNewProduct({
-                barcode: value,
-                name: details?.name ?? "",
-                imageUrl: details?.imageUrl ?? null,
-              })
-              setMessage(details ? "Product information found. Confirm the details below." : "Barcode scanned successfully. Enter the product details below.")
-              return {
-                name: details?.name ?? "New scanned product",
-                barcode: value,
-                imageUrl: details?.imageUrl,
-                detail: "Not yet in inventory · complete the product form to add it",
-                status: "new" as const,
-              }
-            } catch {
-              if (sequence !== inventoryScanSequence.current) return
-              setMessage("Barcode scanned successfully. Product lookup is unavailable, so enter the details below.")
-              return {
-                name: "New scanned product",
-                barcode: value,
-                detail: "Not yet in inventory · enter the product details below",
-                status: "new" as const,
-              }
-            } finally {
-              if (sequence === inventoryScanSequence.current) setLookupBusy(false)
-            }
-            return
-          }
-          setLookupBusy(false)
-          setNewProduct(null)
-          setSelected(product)
-          setSelectedImage(product.image_path)
-          setMessage(`${product.name} found. Enter stock quantity to confirm.`)
-          const sequence = ++inventoryScanSequence.current
-          const stock = Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)
-          if (product.image_path) return {
-            name: product.name,
-            barcode: value,
-            imageUrl: product.image_path,
-            detail: `${stock} ${product.unit} currently in stock`,
-            value: peso(product.price_centavos),
-            status: "existing" as const,
-          }
-          let imageUrl: string | null = null
-          try {
-            const details = await lookupOpenFoodFactsProduct(value)
-            imageUrl = details?.imageUrl ?? null
-            if (sequence === inventoryScanSequence.current) setSelectedImage(imageUrl)
-          } catch {
-            if (sequence === inventoryScanSequence.current) setSelectedImage(null)
-          }
-          return {
-            name: product.name,
-            barcode: value,
-            imageUrl,
-            detail: `${stock} ${product.unit} currently in stock`,
-            value: peso(product.price_centavos),
-            status: "existing" as const,
-          }
-        }}
-      />
+      <div className="dashboard-title inventory-dashboard-title"><div><div className="pos-title-line"><h1>Inventory</h1><BarcodeScanner compact onDetected={scanInventoryProduct} /></div><p>Receive stock only after confirmation.</p></div></div>
       {message && <div className="form-message workspace-message">{message}</div>}
       {newProduct && <form className="inline-form inventory-new-product-form panel" onSubmit={addScannedProduct}>
         <div className="barcode-product-preview">
@@ -654,7 +651,7 @@ export function InventoryView({ context }: { context: BusinessContext }) {
         <div><b>{selected.name}</b><small>Barcode: {selected.product_barcodes[0]?.barcode || "Not assigned"}</small><strong>{Number(selected.inventory_balances[0]?.confirmed_quantity ?? 0)} currently in stock</strong></div>
       </div>}
       {selected && <div className="receive-panel panel"><div><b>Receive {selected.name}</b><small>Current stock: {Number(selected.inventory_balances[0]?.confirmed_quantity ?? 0)} {selected.unit}</small></div><SelectField label="Quantity to add" value={quantity} onChange={(e) => setQuantity(e.target.value)}><option value="">Select quantity</option>{quantityOptions.map((amount) => <option value={amount} key={amount}>{amount}</option>)}</SelectField><Button variant="ghost" onClick={() => { inventoryScanSequence.current += 1; setSelected(null); setSelectedImage(null); }}>Cancel</Button><Button loading={busy} onClick={receive}>Add stock</Button></div>}
-      {products.data?.length ? <div className="inventory-grid">{products.data.map((product) => <article className="inventory-card" key={product.id}><span className="inventory-icon"><Package /></span><div><b>{product.name}</b><small>{product.sku || "No SKU"}</small></div><strong>{Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)}</strong><Button variant="secondary" onClick={() => { inventoryScanSequence.current += 1; setSelectedImage(null); setSelected(product); setMessage(""); }}>Add stock</Button></article>)}</div> : !products.isLoading && <Empty icon={Package} title="No inventory yet" copy="Create a product before receiving stock." />}
+      {products.data?.length ? <div className="inventory-grid">{products.data.map((product) => <article className="inventory-card" key={product.id}>{product.image_path ? <img className="product-list-image" src={product.image_path} alt={`${product.name} package`} /> : <span className="inventory-icon"><Package /></span>}<div><b>{product.name}</b><small>{product.sku || "No SKU"}</small></div><strong>{Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)}</strong><Button variant="secondary" onClick={() => { inventoryScanSequence.current += 1; setSelectedImage(product.image_path); setSelected(product); setMessage(""); }}>Add stock</Button></article>)}</div> : !products.isLoading && <Empty icon={Package} title="No inventory yet" copy="Create a product before receiving stock." />}
     </section>
   )
 }
@@ -744,56 +741,55 @@ export function PosView({ context }: { context: BusinessContext }) {
     setBusy(false)
   }
 
+  async function scanCheckoutProduct(value: string) {
+    const product = products.data?.find((item) =>
+      item.product_barcodes.some((barcode) => barcode.barcode === value),
+    )
+    if (!product) {
+      scanSequence.current += 1
+      setScannedProduct(null)
+      setScannedImage(null)
+      setMessage(`Product not found for barcode ${value}.`)
+      return
+    }
+    setScannedProduct(product)
+    setScannedImage(product.image_path)
+    setQuantity(product, (cart[product.id]?.quantity ?? 0) + 1)
+    const sequence = ++scanSequence.current
+    const stock = Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)
+    if (product.image_path) return {
+      name: product.name,
+      barcode: value,
+      imageUrl: product.image_path,
+      detail: `${stock} ${product.unit} available · added to basket`,
+      value: peso(product.price_centavos),
+      status: "existing" as const,
+    }
+    let imageUrl: string | null = null
+    try {
+      const details = await lookupOpenFoodFactsProduct(value)
+      imageUrl = details?.imageUrl ?? null
+      if (sequence === scanSequence.current) setScannedImage(imageUrl)
+    } catch {
+      if (sequence === scanSequence.current) setScannedImage(null)
+    }
+    return {
+      name: product.name,
+      barcode: value,
+      imageUrl,
+      detail: `${stock} ${product.unit} available · added to basket`,
+      value: peso(product.price_centavos),
+      status: "existing" as const,
+    }
+  }
+
   return (
     <section className="pos-page">
-      <div className="dashboard-title"><div><span className="eyebrow">Fast checkout</span><h1>POS / Checkout</h1></div></div>
+      <div className="dashboard-title pos-dashboard-title"><div><div className="pos-title-line"><h1>POS / Checkout</h1><BarcodeScanner compact onDetected={scanCheckoutProduct} /></div></div></div>
       {receipt && <ReceiptDialog context={context} receipt={receipt} onClose={() => setReceipt(null)} />}
       {cartOpen && <button className="mobile-cart-scrim" aria-label="Close basket" onClick={() => setCartOpen(false)} />}
       <div className="pos-layout">
         <div className="product-browser panel">
-          <BarcodeScanner
-            compact
-            onDetected={async (value) => {
-              const product = products.data?.find((item) =>
-                item.product_barcodes.some((barcode) => barcode.barcode === value),
-              )
-              if (!product) {
-                scanSequence.current += 1
-                setScannedProduct(null)
-                setScannedImage(null)
-                return setMessage(`Product not found for barcode ${value}.`)
-              }
-              setScannedProduct(product)
-              setScannedImage(product.image_path)
-              setQuantity(product, (cart[product.id]?.quantity ?? 0) + 1)
-              const sequence = ++scanSequence.current
-              const stock = Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)
-              if (product.image_path) return {
-                name: product.name,
-                barcode: value,
-                imageUrl: product.image_path,
-                detail: `${stock} ${product.unit} available · added to basket`,
-                value: peso(product.price_centavos),
-                status: "existing" as const,
-              }
-              let imageUrl: string | null = null
-              try {
-                const details = await lookupOpenFoodFactsProduct(value)
-                imageUrl = details?.imageUrl ?? null
-                if (sequence === scanSequence.current) setScannedImage(imageUrl)
-              } catch {
-                if (sequence === scanSequence.current) setScannedImage(null)
-              }
-              return {
-                name: product.name,
-                barcode: value,
-                imageUrl,
-                detail: `${stock} ${product.unit} available · added to basket`,
-                value: peso(product.price_centavos),
-                status: "existing" as const,
-              }
-            }}
-          />
           {scannedProduct && <div className="barcode-product-preview checkout-scan-result">
             {scannedImage ? <img src={scannedImage} alt={`${scannedProduct.name} package`} /> : <span className="barcode-product-placeholder"><Package /></span>}
             <div><b>{scannedProduct.name}</b><small>{scannedProduct.product_barcodes[0]?.barcode || scannedProduct.sku || "Scanned product"}</small><strong>{peso(scannedProduct.price_centavos)}</strong></div>
@@ -803,7 +799,7 @@ export function PosView({ context }: { context: BusinessContext }) {
           <div className="product-card-grid">
             {visibleProducts.map((product) => {
               const stock = Number(product.inventory_balances[0]?.confirmed_quantity ?? 0)
-              return <article className="pos-product" key={product.id}><span className="inventory-icon"><Package /></span><b>{product.name}</b><small>{stock} in stock</small><strong>{peso(product.price_centavos)}</strong><Button disabled={stock <= 0} onClick={() => setQuantity(product, (cart[product.id]?.quantity ?? 0) + 1)}>{stock <= 0 ? "Out of stock" : "Add to basket"}</Button></article>
+              return <article className="pos-product" key={product.id}>{product.image_path ? <img className="pos-product-image" src={product.image_path} alt={`${product.name} package`} /> : <span className="inventory-icon"><Package /></span>}<b>{product.name}</b><small>{stock} in stock</small><strong>{peso(product.price_centavos)}</strong><Button disabled={stock <= 0} onClick={() => setQuantity(product, (cart[product.id]?.quantity ?? 0) + 1)}>{stock <= 0 ? "Out of stock" : "Add to basket"}</Button></article>
             })}
           </div>
           {!products.isLoading && !visibleProducts.length && <Empty icon={Search} title="No matching products" copy="Add products or try another search." />}
@@ -811,7 +807,7 @@ export function PosView({ context }: { context: BusinessContext }) {
         <aside className={`cart-panel panel ${cartOpen ? "mobile-cart-open" : ""}`} aria-label="Checkout basket">
           <div className="cart-heading"><div><ShoppingCart/><b>Active basket</b><span className="cart-heading-count">{cartItemCount}</span></div><div className="cart-heading-actions"><Button variant="ghost" disabled={!lines.length} onClick={() => setCart({})}><Trash2 size={17}/> Clear</Button><Button variant="ghost" className="mobile-cart-close" aria-label="Close basket" onClick={() => setCartOpen(false)}><X size={19}/></Button></div></div>
           <div className="cart-lines">
-            {lines.map(({ product, quantity }) => <div className="cart-line" key={product.id}><div><b>{product.name}</b><small>{peso(product.price_centavos)} each</small></div><div className="quantity-control"><Button variant="ghost" onClick={() => setQuantity(product, quantity - 1)}><Minus size={15}/></Button><span>{quantity}</span><Button variant="ghost" onClick={() => setQuantity(product, quantity + 1)}><Plus size={15}/></Button></div><strong>{peso(product.price_centavos * quantity)}</strong></div>)}
+            {lines.map(({ product, quantity }) => <div className="cart-line" key={product.id}><div className="cart-line-product">{product.image_path ? <img src={product.image_path} alt={`${product.name} package`} /> : <span><Package size={17} /></span>}<div><b>{product.name}</b><small>{peso(product.price_centavos)} each</small></div></div><div className="quantity-control"><Button variant="ghost" onClick={() => setQuantity(product, quantity - 1)}><Minus size={15}/></Button><span>{quantity}</span><Button variant="ghost" onClick={() => setQuantity(product, quantity + 1)}><Plus size={15}/></Button></div><strong>{peso(product.price_centavos * quantity)}</strong></div>)}
             {!lines.length && <Empty icon={ShoppingCart} title="Basket is empty" copy="Choose a product to begin." />}
           </div>
           <div className="cart-total"><span>Total</span><strong>{peso(total)}</strong></div>

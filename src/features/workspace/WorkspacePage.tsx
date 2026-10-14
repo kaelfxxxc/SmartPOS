@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   Bell,
@@ -7,6 +7,7 @@ import {
   CircleDollarSign,
   Cloud,
   CreditCard,
+  Download,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -32,6 +33,11 @@ import {
 } from "./WorkspaceViews"
 import type { BusinessContext, WorkspaceView } from "./types"
 
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
+}
+
 const coreNav = [
   [LayoutDashboard, "Dashboard", "dashboard"],
   [ShoppingCart, "POS / Cashier", "pos"],
@@ -49,6 +55,41 @@ export default function WorkspacePage() {
   const navigate = useNavigate()
   const [view, setView] = useState<WorkspaceView>("dashboard")
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
+  const [installHelp, setInstallHelp] = useState(false)
+  const [installed, setInstalled] = useState(() =>
+    window.matchMedia("(display-mode: standalone)").matches ||
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
+  )
+
+  useEffect(() => {
+    const capturePrompt = (event: Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as InstallPromptEvent)
+    }
+    const markInstalled = () => {
+      setInstalled(true)
+      setInstallPrompt(null)
+      setInstallHelp(false)
+    }
+    window.addEventListener("beforeinstallprompt", capturePrompt)
+    window.addEventListener("appinstalled", markInstalled)
+    return () => {
+      window.removeEventListener("beforeinstallprompt", capturePrompt)
+      window.removeEventListener("appinstalled", markInstalled)
+    }
+  }, [])
+
+  async function installApp() {
+    if (!installPrompt) {
+      setInstallHelp(true)
+      return
+    }
+    await installPrompt.prompt()
+    const choice = await installPrompt.userChoice
+    if (choice.outcome === "accepted") setInstalled(true)
+    setInstallPrompt(null)
+  }
 
   const membership = useQuery({
     queryKey: ["current-business"],
@@ -184,6 +225,11 @@ export default function WorkspacePage() {
             <i /> Online
           </span>
           <span className="system-ready-pill">System ready</span>
+          {!installed && (
+            <Button variant="secondary" className="pwa-install-button" onClick={installApp}>
+              <Download size={17} /> <span>Install app</span>
+            </Button>
+          )}
           <Button
             variant="ghost"
             className="icon-button"
@@ -205,6 +251,12 @@ export default function WorkspacePage() {
           </Button>
         </header>
         <section className="dashboard-content">
+          {installHelp && (
+            <div className="pwa-install-help" role="status">
+              <span>Open your browser menu and choose <b>Install app</b> or <b>Add to Home Screen</b>. On iPhone and iPad, use the Share menu.</span>
+              <Button variant="ghost" aria-label="Close installation instructions" onClick={() => setInstallHelp(false)}><X size={16} /></Button>
+            </div>
+          )}
           {membership.error && (
             <div className="form-message">
               Unable to load your business workspace. Confirm the migrations

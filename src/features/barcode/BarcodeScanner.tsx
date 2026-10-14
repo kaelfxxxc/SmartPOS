@@ -130,12 +130,13 @@ export default function BarcodeScanner({
 
   if (!mobileDevice) {
     return (
-      <div className={compact ? "mobile-scan-notice compact" : "mobile-scan-notice"}>
+      <div
+        className={compact ? "mobile-scan-notice compact" : "mobile-scan-notice"}
+        aria-label="Mobile camera scanning. Open SmartPOS on a phone to scan product barcodes."
+        title="Open SmartPOS on a phone to scan product barcodes"
+      >
         <Smartphone />
-        <div>
-          <b>Mobile camera scanning</b>
-          <small>Open SmartPOS on a phone to scan product barcodes.</small>
-        </div>
+        <span>Barcode scanner</span>
       </div>
     )
   }
