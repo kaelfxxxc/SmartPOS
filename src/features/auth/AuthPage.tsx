@@ -290,7 +290,7 @@ export default function AuthPage() {
               </div>
             )}
             <Button type="submit" loading={busy}>
-              {mode === "login" ? <>Sign in to POS Workspace <ArrowRight size={18}/></> : <>Create my account <ArrowRight size={18}/></>}
+              {mode === "login" ? <>Sign in to POS Workspace</> : <>Create my account <ArrowRight size={18}/></>}
             </Button>
           </form>
           <p className="switch-mode">
