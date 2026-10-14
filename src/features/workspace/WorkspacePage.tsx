@@ -199,14 +199,21 @@ export default function WorkspacePage() {
             </Button>
           ))}
         </nav>
+        <div className="sidebar-footer">
         {subscription.data && (() => {
           const expiration = subscription.data.status === "trialing" ? subscription.data.trial_ends_at : subscription.data.current_period_ends_at
           const daysLeft = expiration ? Math.max(0, Math.ceil((new Date(expiration).getTime() - Date.now()) / 86_400_000)) : null
           return <div className="sidebar-trial"><CalendarDays size={19} /><div><b>{subscription.data.status === "trialing" ? "Free trial" : subscription.data.plan.replace("_", " ")}</b><small>{expiration ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left · Ends ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }).format(new Date(expiration))}` : "No expiration date"}</small></div></div>
         })()}
+        {!installed && (
+          <Button variant="secondary" className="pwa-install-button sidebar-install-button" onClick={installApp}>
+            <Download size={17} /> <span>Install SmartPOS</span>
+          </Button>
+        )}
         <div className="sidebar-help">
           <Cloud size={20} />
           <b>Connected & secure</b>
+        </div>
         </div>
       </aside>
       <main className="workspace-main">
@@ -246,11 +253,6 @@ export default function WorkspacePage() {
             <i /> Online
           </span>
           <span className="system-ready-pill">System ready</span>
-          {!installed && (
-            <Button variant="secondary" className="pwa-install-button" onClick={installApp}>
-              <Download size={17} /> <span>Install app</span>
-            </Button>
-          )}
           <Button
             variant="ghost"
             className="icon-button"
