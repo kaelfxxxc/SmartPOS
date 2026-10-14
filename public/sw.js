@@ -1,4 +1,4 @@
-const VERSION = "v4"
+const VERSION = "v5"
 const CACHE_PREFIX = "smartpos"
 const SHELL_CACHE = `${CACHE_PREFIX}-shell-${VERSION}`
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${VERSION}`
@@ -21,7 +21,9 @@ async function precacheAppShell() {
   await Promise.allSettled(assetUrls.map((url) => cache.add(url)))
 }
 
-self.addEventListener("install", (event) => event.waitUntil(precacheAppShell()))
+self.addEventListener("install", (event) => event.waitUntil(
+  precacheAppShell().then(() => self.skipWaiting()),
+))
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(caches.keys().then((names) => Promise.all(names
@@ -65,5 +67,9 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(networkFirst(request, SHELL_CACHE, OFFLINE_URL))
     return
   }
-  if (["style", "script", "image", "font"].includes(request.destination)) event.respondWith(cacheFirst(request))
+  if (["style", "script"].includes(request.destination)) {
+    event.respondWith(networkFirst(request, STATIC_CACHE))
+    return
+  }
+  if (["image", "font"].includes(request.destination)) event.respondWith(cacheFirst(request))
 })
