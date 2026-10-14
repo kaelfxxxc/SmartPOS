@@ -532,14 +532,14 @@ export default function LandingPage() {
             ],
             [
               "Starter",
-              "₱699",
+              "₱699.00",
               "Up to 500 products",
               "100 AI scans per month",
               "Food waste reports & storage areas",
             ],
             [
               "Professional",
-              "₱999",
+              "₱999.00",
               "Up to 500 products",
               "Unlimited AI scans",
               "Multiple staff & advanced reporting",
