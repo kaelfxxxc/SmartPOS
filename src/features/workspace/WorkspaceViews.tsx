@@ -89,6 +89,44 @@ export function DashboardView({
   onNavigate: (view: "inventory" | "pos") => void
 }) {
   const products = useProducts(context)
+  const formatPhilippineDate = () => new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date())
+  const [philippineDate, setPhilippineDate] = useState(formatPhilippineDate)
+  const walletDayStart = new Date(`${philippineDate}T00:00:00+08:00`)
+  const walletDayEnd = new Date(walletDayStart.getTime() + 86_400_000)
+  const walletSummary = useQuery({
+    queryKey: ["dashboard-wallet-summary", context.branchId, philippineDate],
+    queryFn: async () => {
+      const [balancesResult, activityResult] = await Promise.all([
+        supabase
+          .from("digital_wallet_balances")
+          .select("wallet_provider,balance_centavos")
+          .eq("business_id", context.businessId)
+          .eq("branch_id", context.branchId),
+        supabase
+          .from("digital_wallet_ledger_entries")
+          .select("wallet_provider,service_fee_centavos")
+          .eq("business_id", context.businessId)
+          .eq("branch_id", context.branchId)
+          .gte("created_at", walletDayStart.toISOString())
+          .lt("created_at", walletDayEnd.toISOString()),
+      ])
+      if (balancesResult.error) throw balancesResult.error
+      if (activityResult.error) throw activityResult.error
+      return {
+        balances: balancesResult.data ?? [],
+        activity: activityResult.data ?? [],
+      }
+    },
+  })
+  useEffect(() => {
+    const timer = window.setInterval(() => setPhilippineDate(formatPhilippineDate()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
   const sales = useQuery({
     queryKey: ["dashboard-sales", context.branchId],
     queryFn: async () => {
@@ -125,6 +163,15 @@ export function DashboardView({
       void supabase.removeChannel(channel)
     }
   }, [context.branchId, sales.refetch])
+  useEffect(() => {
+    const channel = supabase
+      .channel(`dashboard-wallet-${context.branchId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "digital_wallet_ledger_entries", filter: `branch_id=eq.${context.branchId}` }, () => {
+        void walletSummary.refetch()
+      })
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [context.branchId, walletSummary.refetch])
   const totals = useMemo(
     () =>
       (sales.data ?? []).reduce(
@@ -140,6 +187,12 @@ export function DashboardView({
     (product) =>
       Number(product.inventory_balances[0]?.confirmed_quantity ?? 0) <= 5,
   ).length
+  const walletMetric = (provider: "gcash" | "maya") => ({
+    balance: Number(walletSummary.data?.balances.find((item) => item.wallet_provider === provider)?.balance_centavos ?? 0),
+    profit: (walletSummary.data?.activity ?? []).filter((item) => item.wallet_provider === provider).reduce((sum, item) => sum + Number(item.service_fee_centavos), 0),
+  })
+  const gcashToday = walletMetric("gcash")
+  const mayaToday = walletMetric("maya")
   const hourlySales = useMemo(() => {
     const buckets = Array.from({ length: 12 }, (_, index) => ({
       label: `${String(index * 2).padStart(2, "0")}:00`,
@@ -212,6 +265,11 @@ export function DashboardView({
           </article>
         ))}
       </div>
+      <div className="dashboard-wallet-grid">
+        <article className="dashboard-wallet-card gcash"><span>G</span><div><small>Current GCash balance</small><strong>{walletSummary.isLoading ? "—" : peso(gcashToday.balance)}</strong><em>Today’s profit: {walletSummary.isLoading ? "—" : peso(gcashToday.profit)}</em></div></article>
+        <article className="dashboard-wallet-card maya"><span>M</span><div><small>Current Maya balance</small><strong>{walletSummary.isLoading ? "—" : peso(mayaToday.balance)}</strong><em>Today’s profit: {walletSummary.isLoading ? "—" : peso(mayaToday.profit)}</em></div></article>
+      </div>
+      {walletSummary.error && <div className="form-message workspace-message">Apply the digital wallet and service-fee migrations to show wallet totals.</div>}
       <div className="dashboard-grid">
         <article className="panel sales-chart-panel">
           <div className="panel-title">

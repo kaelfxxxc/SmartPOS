@@ -6,6 +6,7 @@ import type {
 } from "react"
 import { Link, type LinkProps } from "react-router"
 import { LoaderCircle } from "lucide-react"
+import smartPosLogo from "@/images/icons/smart-pos-logo.png"
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "dark"
@@ -99,15 +100,15 @@ export function CheckboxField({
   )
 }
 
-export function Logo({ light = false, transparent = false }: { light?: boolean; transparent?: boolean }) {
+export function Logo({ light = false }: { light?: boolean }) {
   return (
     <AppLink
       to="/"
-      className={`logo ${light ? "logo-light" : ""} ${transparent ? "logo-transparent" : ""}`}
+      className={`logo ${light ? "logo-light" : ""}`}
       aria-label="SmartPOS — Your AI-native POS"
     >
       <img
-        src={`${import.meta.env.BASE_URL}brand/${transparent ? "smart-pos-logo-transparent" : "smart-pos-logo"}.png`}
+        src={smartPosLogo}
         alt="SmartPOS — Your AI-native POS"
       />
     </AppLink>
