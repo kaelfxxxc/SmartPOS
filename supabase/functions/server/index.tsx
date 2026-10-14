@@ -1,4 +1,4 @@
-import { Hono } from "npm:hono";
+import { Hono, type Context } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import * as kv from "./kv_store.tsx";
@@ -13,7 +13,7 @@ app.use(
   "/*",
   cors({
     origin: "*",
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "apikey", "x-client-info"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
@@ -31,7 +31,7 @@ const planCatalog = {
   },
 } as const;
 
-app.post("/", async (c) => {
+async function forwardCheckout(c: Context) {
   const body = await c.req.json().catch(() => ({}));
   const headers = new Headers(c.req.raw.headers);
   headers.set("Content-Type", "application/json");
@@ -40,7 +40,11 @@ app.post("/", async (c) => {
     headers,
     body: JSON.stringify(body),
   }));
-});
+}
+
+app.post("/", forwardCheckout);
+app.post("/server", forwardCheckout);
+app.post("/server/", forwardCheckout);
 
 function adminClient() {
   const url = Deno.env.get("SUPABASE_URL");
@@ -140,6 +144,8 @@ app.post("/paymongo/checkout", async (c) => {
     return c.json({ error: error instanceof Error ? error.message : "Could not start subscription checkout." }, 500);
   }
 });
+
+app.post("/server/paymongo/checkout", forwardCheckout);
 
 app.post("/paymongo/webhook", async (c) => {
   const webhookSecret = Deno.env.get("PAYMONGO_WEBHOOK_SECRET");
