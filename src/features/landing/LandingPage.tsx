@@ -301,9 +301,6 @@ export default function LandingPage() {
       {installHelp && <div className="landing-install-help" role="status"><span>Open your browser menu and choose <b>Install app</b> or <b>Add to Home Screen</b>. On iPhone and iPad, use the Share menu.</span><Button variant="ghost" aria-label="Close installation instructions" onClick={() => setInstallHelp(false)}><X size={16} /></Button></div>}
       <section className="hero">
         <div className="hero-copy">
-          <span className="eyebrow">
-            <i /> Modern POS for Filipino businesses
-          </span>
           <h1>
             Your Business.
             <br />
@@ -316,8 +313,8 @@ export default function LandingPage() {
             credit—designed around how Filipino businesses actually work.
           </p>
           <div className="hero-actions">
-            <AppLink to="/login" variant="primary">
-              Start 7-day free trial <ArrowRight size={18} />
+            <AppLink to="/login" variant="primary" className="hero-trial-cta">
+              Start 7-day free trial
             </AppLink>
             <a className="btn btn-ghost" href="#features">
               Explore features
@@ -493,7 +490,6 @@ export default function LandingPage() {
         <div className="security-badge">
           <ShieldCheck />
           <b>Protected workspace</b>
-          <span>Supabase Auth · PostgreSQL RLS · Secure sessions</span>
         </div>
       </section>
       <section className="section business-section">
@@ -535,14 +531,14 @@ export default function LandingPage() {
               "Basic inventory & expiration alerts",
             ],
             [
-              "Premium",
+              "Starter",
               "₱699",
               "Up to 500 products",
               "100 AI scans per month",
               "Food waste reports & storage areas",
             ],
             [
-              "Pro",
+              "Professional",
               "₱999",
               "Up to 500 products",
               "Unlimited AI scans",

@@ -59,6 +59,7 @@ export default function WorkspacePage() {
   const navigate = useNavigate()
   const [view, setView] = useState<WorkspaceView>("dashboard")
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false)
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
   const [installHelp, setInstallHelp] = useState(false)
   const [installed, setInstalled] = useState(() =>
@@ -200,10 +201,14 @@ export default function WorkspacePage() {
           ))}
         </nav>
         <div className="sidebar-footer">
+        {subscription.isLoading && <div className="sidebar-trial" title="Loading subscription"><CalendarDays size={19} /><div><b>Subscription</b><small>Loading plan…</small></div></div>}
+        {subscription.error && <div className="sidebar-trial subscription-error" title="Subscription unavailable"><CalendarDays size={19} /><div><b>Subscription unavailable</b><small>Apply the subscription migration.</small></div></div>}
         {subscription.data && (() => {
           const expiration = subscription.data.status === "trialing" ? subscription.data.trial_ends_at : subscription.data.current_period_ends_at
           const daysLeft = expiration ? Math.max(0, Math.ceil((new Date(expiration).getTime() - Date.now()) / 86_400_000)) : null
-          return <div className="sidebar-trial"><CalendarDays size={19} /><div><b>{subscription.data.status === "trialing" ? "Free trial" : subscription.data.plan.replace("_", " ")}</b><small>{expiration ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left · Ends ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }).format(new Date(expiration))}` : "No expiration date"}</small></div></div>
+          const planLabel = subscription.data.status === "trialing" ? "Free trial" : subscription.data.plan.replace("_", " ")
+          const detail = expiration ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left · Ends ${new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Manila" }).format(new Date(expiration))}` : "No expiration date"
+          return <button type="button" className="sidebar-trial" title={`${planLabel} · ${detail}`} aria-label={`View subscription plan: ${planLabel}`} onClick={() => { setSubscriptionOpen(true); setMobileOpen(false) }}><CalendarDays size={19} /><div><b>{planLabel}</b><small>{detail}</small><span className="sidebar-trial-action">View plan</span></div></button>
         })()}
         {!installed && (
           <Button variant="secondary" className="pwa-install-button sidebar-install-button" onClick={installApp}>
@@ -216,6 +221,11 @@ export default function WorkspacePage() {
         </div>
         </div>
       </aside>
+      {subscriptionOpen && subscription.data && (() => {
+        const expiration = subscription.data.status === "trialing" ? subscription.data.trial_ends_at : subscription.data.current_period_ends_at
+        const planLabel = subscription.data.status === "trialing" ? "7-Day Free Trial" : subscription.data.plan === "professional" ? "Professional" : "Starter"
+        return <div className="subscription-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSubscriptionOpen(false) }}><section className="subscription-dialog" role="dialog" aria-modal="true" aria-labelledby="subscription-dialog-title"><header><div><span><CalendarDays size={22}/></span><div><small>Current subscription</small><h2 id="subscription-dialog-title">{planLabel}</h2></div></div><Button variant="ghost" aria-label="Close subscription details" onClick={() => setSubscriptionOpen(false)}><X size={20}/></Button></header><div className="subscription-dialog-status"><div><small>Status</small><b>{subscription.data.status}</b></div><div><small>Billing</small><b>{subscription.data.billing_cycle ?? "Not started"}</b></div><div><small>{subscription.data.status === "trialing" ? "Trial expires" : "Period ends"}</small><b>{expiration ? new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeZone: "Asia/Manila" }).format(new Date(expiration)) : "No date"}</b></div></div><div className="subscription-options"><article><b>Starter</b><strong>₱699<small>/month</small></strong><span>Up to 500 products and 100 AI scans monthly</span></article><article><b>Professional</b><strong>₱999<small>/month</small></strong><span>Unlimited AI scans, staff access, and advanced reports</span></article></div><footer><Button variant="ghost" onClick={() => setSubscriptionOpen(false)}>Close</Button><Button onClick={() => { setSubscriptionOpen(false); changeView("settings") }}>Open subscription settings</Button></footer></section></div>
+      })()}
       <main className="workspace-main">
         <header className="workspace-header">
           <Button

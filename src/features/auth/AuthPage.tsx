@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { ArrowLeft, Check, Store } from "lucide-react"
+import { ArrowRight, Check, Cloud, ShieldCheck, WifiOff, Zap } from "lucide-react"
 import { useNavigate } from "react-router"
 import { supabase } from "@/lib/supabase/client"
 import {
@@ -135,17 +135,21 @@ export default function AuthPage() {
   return (
     <main className="auth-layout">
       <section className="auth-brand-panel">
-        <Logo light />
+        <div className="auth-brand-lockup">
+          <Logo light />
+          <div><b>SmartPOS</b><small>Philippine Cloud &amp; Offline Commerce Core</small></div>
+        </div>
         <div className="auth-promise">
-          <span className="eyebrow light">Built for Filipino businesses</span>
-          <h1>Simple enough for today. Powerful enough for what’s next.</h1>
+          <h1>Simple enough for today.<br/><em>Ready for what&apos;s next.</em></h1>
           <p>
-            Run sales, inventory, and customer credit from one secure workspace.
+            Power checkout, inventory, GCash and Maya records, and customer
+            credit from one secure business workspace.
           </p>
           {[
-            "Secure business-isolated records",
-            "Works with cash, GCash, Maya, and utang",
-            "Designed for fast, accessible checkout",
+            "Fast barcode checkout and confirmed stock updates",
+            "GCash and Maya ledger with service-fee profit tracking",
+            "Offline-ready workflows for unstable connections",
+            "Digital utang ledger and customer balance records",
           ].map((item) => (
             <div className="auth-check" key={item}>
               <Check size={18} />
@@ -153,17 +157,18 @@ export default function AuthPage() {
             </div>
           ))}
         </div>
-        <span className="security-note">
-          <Store size={18} /> Trusted by many food establishments in the
-          Philippines
-        </span>
+        <div className="auth-live-card">
+          <div><span><i /> Workspace ready</span><b>Cloud synchronized</b></div>
+          <div><small>Store operations</small><strong>Sales · Stock · Wallets · Utang</strong></div>
+        </div>
+        <span className="security-note"><ShieldCheck size={18} /> Business-isolated records with secure Supabase authentication</span>
       </section>
       <section className="auth-form-panel">
+        <header className="auth-panel-header">
+          <AppLink to="/" className="back-link">Back</AppLink>
+          <div><span className="auth-region">🇵🇭 EN / PH</span></div>
+        </header>
         <div className="auth-card">
-          <AppLink to="/" className="back-link">
-            <ArrowLeft size={17} /> Back
-          </AppLink>
-          <span className="eyebrow">Welcome to SmartPOS</span>
           <h2>
             {mode === "login"
               ? "Sign in to your business"
@@ -171,9 +176,13 @@ export default function AuthPage() {
           </h2>
           <p className="muted">
             {mode === "login"
-              ? "Enter your details to continue."
+              ? "Enter your store manager credentials or registered business email."
               : "No card required. Set up your first branch in minutes."}
           </p>
+          <div className="auth-mode-tabs" role="tablist" aria-label="Account access mode">
+            <button type="button" className={mode === "login" ? "active" : ""} onClick={() => { setMode("login"); setMessage("") }}>Business Owner / Admin</button>
+            <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => { setMode("signup"); setMessage("") }}><Zap size={15}/> Start Free Trial</button>
+          </div>
           <div className="social-login-grid">
             <Button
               variant="secondary"
@@ -197,7 +206,7 @@ export default function AuthPage() {
             </Button>
           </div>
           <div className="divider">
-            <span>or use email</span>
+            <span>or sign in with registered business email</span>
           </div>
           <form onSubmit={handleSubmit(submit)} className="form-stack">
             {mode === "signup" && (
@@ -273,14 +282,7 @@ export default function AuthPage() {
               </div>
             )}
             {mode === "login" && (
-              <Button
-                type="button"
-                variant="ghost"
-                className="forgot"
-                onClick={resetPassword}
-              >
-                Forgot password?
-              </Button>
+              <div className="auth-login-options"><label><input type="checkbox" defaultChecked /> Remember this device</label><Button type="button" variant="ghost" className="forgot" onClick={resetPassword}>Forgot password?</Button></div>
             )}
             {message && (
               <div className="form-message" role="status">
@@ -288,11 +290,11 @@ export default function AuthPage() {
               </div>
             )}
             <Button type="submit" loading={busy}>
-              {mode === "login" ? "Sign in securely" : "Create my account"}
+              {mode === "login" ? <>Sign in to POS Workspace <ArrowRight size={18}/></> : <>Create my account <ArrowRight size={18}/></>}
             </Button>
           </form>
           <p className="switch-mode">
-            {mode === "login" ? "New to SmartPOS?" : "Already have an account?"}
+            {mode === "login" ? "Don’t have a SmartPOS account yet?" : "Already have an account?"}
             <Button
               variant="ghost"
               onClick={() => {
@@ -300,9 +302,10 @@ export default function AuthPage() {
                 setMessage("")
               }}
             >
-              {mode === "login" ? "Start free" : "Sign in"}
+              {mode === "login" ? "Start 7-Day Free Trial" : "Sign in"}
             </Button>
           </p>
+          <div className="auth-trust-row"><span><ShieldCheck size={14}/> Secure authentication</span><span><Cloud size={14}/> Cloud synced</span><span><WifiOff size={14}/> Offline ready</span></div>
         </div>
       </section>
     </main>
